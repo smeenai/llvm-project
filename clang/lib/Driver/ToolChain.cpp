@@ -689,6 +689,7 @@ ToolChain::getFallbackAndroidTargetPath(StringRef BaseDir) const {
   unsigned BestVersion = 0;
 
   SmallString<32> TripleDir;
+  bool UsingUnversionedDir = false;
   std::error_code EC;
   for (llvm::vfs::directory_iterator LI = getVFS().dir_begin(BaseDir, EC), LE;
        !EC && LI != LE; LI = LI.increment(EC)) {
@@ -697,24 +698,27 @@ ToolChain::getFallbackAndroidTargetPath(StringRef BaseDir) const {
     if (DirNameSuffix.consume_front(TripleWithoutLevelStr)) {
       if (DirNameSuffix.empty() && TripleDir.empty()) {
         TripleDir = DirName;
+        UsingUnversionedDir = true;
       } else {
         unsigned Version;
         if (!DirNameSuffix.getAsInteger(10, Version) && Version > BestVersion &&
             Version < TripleVersion) {
           BestVersion = Version;
           TripleDir = DirName;
+          UsingUnversionedDir = false;
         }
       }
     }
   }
 
-  if (!TripleDir.empty()) {
-    SmallString<128> P(BaseDir);
-    llvm::sys::path::append(P, TripleDir);
-    return std::string(P);
-  }
+  if (TripleDir.empty())
+    return {};
 
-  return {};
+  SmallString<128> P(BaseDir);
+  llvm::sys::path::append(P, TripleDir);
+  if (UsingUnversionedDir)
+    D.Diag(diag::warn_android_unversioned_fallback) << P << getTripleString();
+  return std::string(P);
 }
 
 std::optional<std::string>
