@@ -5604,6 +5604,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back(Args.MakeArgString("-fwarn-stack-size=" + V));
   }
 
+  Args.addOptInFlag(CmdArgs, options::OPT_ftrace_global_constructors,
+                    options::OPT_fno_trace_global_constructors);
+
   Args.addOptOutFlag(CmdArgs, options::OPT_fjump_tables,
                      options::OPT_fno_jump_tables);
   Args.addOptInFlag(CmdArgs, options::OPT_fprofile_sample_accurate,

@@ -1686,6 +1686,12 @@ defm gnu_inline_asm : BoolFOption<"gnu-inline-asm",
           "Disable GNU style inline asm">,
   PosFlag<SetTrue>>;
 
+def ftrace_global_constructors : Flag<["-"], "ftrace-global-constructors">, Group<f_Group>,
+  Visibility<[ClangOption, CC1Option]>,
+  HelpText<"Emit Android tracing for global constructors.">,
+  MarshallingInfoFlag<CodeGenOpts<"TraceGlobalConstructors">>;
+def fno_trace_global_constructors : Flag<["-"], "fno-trace-global-constructors">, Group<f_Group>;
+
 def fprofile_sample_use : Flag<["-"], "fprofile-sample-use">, Group<f_Group>,
     Visibility<[ClangOption, CLOption]>;
 def fno_profile_sample_use : Flag<["-"], "fno-profile-sample-use">, Group<f_Group>,

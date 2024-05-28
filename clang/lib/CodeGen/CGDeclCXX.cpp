@@ -10,6 +10,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "CGBuilder.h"
 #include "CGCXXABI.h"
 #include "CGHLSLRuntime.h"
 #include "CGObjCRuntime.h"
@@ -18,10 +19,17 @@
 #include "TargetInfo.h"
 #include "clang/AST/Attr.h"
 #include "clang/Basic/LangOptions.h"
+#include "clang/Basic/SourceLocation.h"
+#include "clang/Basic/SourceManager.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/IR/Constant.h"
+#include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/MDBuilder.h"
 #include "llvm/Support/Path.h"
+#include "llvm/Support/raw_ostream.h"
 
 using namespace clang;
 using namespace CodeGen;
@@ -1001,6 +1009,48 @@ void CodeGenModule::EmitCXXGlobalCleanUpFunc() {
   CXXGlobalDtorsOrStermFinalizers.clear();
 }
 
+void CodeGenFunction::emitGlobalConstructorTraceBegin(const Decl &D) {
+  if (!CGM.getCodeGenOpts().TraceGlobalConstructors)
+    return;
+
+  ASTContext &C = CGM.getContext();
+  const CGFunctionInfo &FI = CGM.getTypes().arrangeBuiltinFunctionDeclaration(
+      C.VoidTy, {C.getPointerType(C.CharTy)});
+  llvm::FunctionType *FTy = CGM.getTypes().GetFunctionType(FI);
+  llvm::FunctionCallee FCallee =
+      CGM.CreateRuntimeFunction(FTy, "ATrace_beginSection");
+  llvm::Function *F = cast<llvm::Function>(FCallee.getCallee());
+  if (F->empty()) {
+    CGM.SetLLVMFunctionAttributes(GlobalDecl(), FI, F, /*IsThunk=*/false);
+    F->addParamAttr(0, llvm::Attribute::AttrKind::NoUndef);
+  }
+
+  SmallString<256> TraceStr("staticinit ");
+  llvm::raw_svector_ostream OS(TraceStr);
+  D.getBeginLoc().print(OS, C.getSourceManager());
+  llvm::Constant *TraceStrPtr =
+      Builder.CreateGlobalStringPtr(TraceStr.str(), "trace.init");
+  llvm::CallBase *Call = EmitRuntimeCallOrInvoke(FCallee, {TraceStrPtr});
+  Call->addParamAttr(0, llvm::Attribute::AttrKind::NoUndef);
+}
+
+void CodeGenFunction::emitGlobalConstructorTraceEnd() {
+  if (!CGM.getCodeGenOpts().TraceGlobalConstructors)
+    return;
+
+  ASTContext &C = CGM.getContext();
+  const CGFunctionInfo &FI =
+      CGM.getTypes().arrangeBuiltinFunctionDeclaration(C.VoidTy, {});
+  llvm::FunctionType *FTy = CGM.getTypes().GetFunctionType(FI);
+  llvm::FunctionCallee FCallee =
+      CGM.CreateRuntimeFunction(FTy, "ATrace_endSection");
+  llvm::Function *F = cast<llvm::Function>(FCallee.getCallee());
+  if (F->empty())
+    CGM.SetLLVMFunctionAttributes(GlobalDecl(), FI, F, /*IsThunk=*/false);
+
+  EmitRuntimeCallOrInvoke(FCallee);
+}
+
 /// Emit the code necessary to initialize the given global variable.
 void CodeGenFunction::GenerateCXXGlobalVarDeclInitFunc(llvm::Function *Fn,
                                                        const VarDecl *D,
@@ -1017,6 +1067,8 @@ void CodeGenFunction::GenerateCXXGlobalVarDeclInitFunc(llvm::Function *Fn,
                 FunctionArgList());
   // Emit an artificial location for this function.
   auto AL = ApplyDebugLocation::CreateArtificial(*this);
+
+  emitGlobalConstructorTraceBegin(*D);
 
   // Use guarded initialization if the global variable is weak. This
   // occurs for, e.g., instantiated static data members and
@@ -1035,6 +1087,8 @@ void CodeGenFunction::GenerateCXXGlobalVarDeclInitFunc(llvm::Function *Fn,
 
   if (getLangOpts().HLSL)
     CGM.getHLSLRuntime().annotateHLSLResource(D, Addr);
+
+  emitGlobalConstructorTraceEnd();
 
   FinishFunction();
 }
