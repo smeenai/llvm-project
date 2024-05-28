@@ -1459,6 +1459,55 @@ QualType CodeGenFunction::BuildFunctionArgList(GlobalDecl GD,
   return ResTy;
 }
 
+void CodeGenFunction::emitGlobalConstructorTraceBegin(const Decl &D,
+                                                      StringRef Prefix) {
+  if (!CGM.getCodeGenOpts().TraceGlobalConstructors)
+    return;
+
+  // It would be cleaner to add a flag to CodeGenModule, but I'm trying to
+  // minimize the number of places to add local changes to.
+  if (!CGM.GetGlobalValue("ATrace_beginSection"))
+    CGM.AddDependentLib("android");
+
+  ASTContext &C = CGM.getContext();
+  const CGFunctionInfo &FI = CGM.getTypes().arrangeBuiltinFunctionDeclaration(
+      C.VoidTy, {C.getPointerType(C.CharTy)});
+  llvm::FunctionType *FTy = CGM.getTypes().GetFunctionType(FI);
+  llvm::FunctionCallee FCallee =
+      CGM.CreateRuntimeFunction(FTy, "ATrace_beginSection");
+  llvm::Function *F = cast<llvm::Function>(FCallee.getCallee());
+  if (F->empty()) {
+    // This matches the declaration generated when Clang includes <trace.h>
+    CGM.SetLLVMFunctionAttributes(GlobalDecl(), FI, F, /*IsThunk=*/false);
+    F->addParamAttr(0, llvm::Attribute::AttrKind::NoUndef);
+  }
+
+  SmallString<256> TraceStr(Prefix);
+  llvm::raw_svector_ostream OS(TraceStr);
+  D.getBeginLoc().print(OS, C.getSourceManager());
+  llvm::Constant *TraceStrPtr =
+      Builder.CreateGlobalStringPtr(TraceStr.str(), "trace.init");
+  llvm::CallBase *Call = EmitRuntimeCallOrInvoke(FCallee, {TraceStrPtr});
+  Call->addParamAttr(0, llvm::Attribute::AttrKind::NoUndef);
+}
+
+void CodeGenFunction::emitGlobalConstructorTraceEnd() {
+  if (!CGM.getCodeGenOpts().TraceGlobalConstructors)
+    return;
+
+  ASTContext &C = CGM.getContext();
+  const CGFunctionInfo &FI =
+      CGM.getTypes().arrangeBuiltinFunctionDeclaration(C.VoidTy, {});
+  llvm::FunctionType *FTy = CGM.getTypes().GetFunctionType(FI);
+  llvm::FunctionCallee FCallee =
+      CGM.CreateRuntimeFunction(FTy, "ATrace_endSection");
+  llvm::Function *F = cast<llvm::Function>(FCallee.getCallee());
+  if (F->empty())
+    CGM.SetLLVMFunctionAttributes(GlobalDecl(), FI, F, /*IsThunk=*/false);
+
+  EmitRuntimeCallOrInvoke(FCallee);
+}
+
 void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
                                    const CGFunctionInfo &FnInfo) {
   assert(Fn && "generating code for null Function");
@@ -1557,6 +1606,9 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
   // Emit the standard function prologue.
   StartFunction(GD, ResTy, Fn, FnInfo, Args, Loc, BodyRange.getBegin());
 
+  if (FD->hasAttr<ConstructorAttr>())
+    emitGlobalConstructorTraceBegin(*FD, "staticattr: ");
+
   // Save parameters for coroutine function.
   if (Body && isa_and_nonnull<CoroutineBodyStmt>(Body))
     llvm::append_range(FnArgs, FD->parameters());
@@ -1653,6 +1705,9 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
       Builder.ClearInsertionPoint();
     }
   }
+
+  if (FD->hasAttr<ConstructorAttr>())
+    emitGlobalConstructorTraceEnd();
 
   // Emit the standard function epilogue.
   FinishFunction(BodyRange.getEnd());

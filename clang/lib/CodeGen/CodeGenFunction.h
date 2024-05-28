@@ -5457,6 +5457,9 @@ private:
   void emitZeroOrPatternForAutoVarInit(QualType type, const VarDecl &D,
                                        Address Loc);
 
+  void emitGlobalConstructorTraceBegin(const Decl &D, StringRef Prefix);
+  void emitGlobalConstructorTraceEnd();
+
 public:
   enum class EvaluationOrder {
     ///! No language constraints on evaluation order.

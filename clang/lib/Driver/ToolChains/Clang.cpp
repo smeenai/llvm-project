@@ -5643,6 +5643,15 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back(Args.MakeArgString("-fwarn-stack-size=" + V));
   }
 
+  if (Args.hasFlag(options::OPT_ftrace_global_constructors,
+                   options::OPT_fno_trace_global_constructors, false)) {
+    if (Triple.isAndroid() && !Triple.isAndroidVersionLT(23))
+      CmdArgs.push_back("-ftrace-global-constructors");
+    else
+      D.Diag(diag::err_drv_unsupported_opt_for_target)
+          << "-ftrace-global-constructors" << RawTriple.str();
+  }
+
   Args.addOptOutFlag(CmdArgs, options::OPT_fjump_tables,
                      options::OPT_fno_jump_tables);
   Args.addOptInFlag(CmdArgs, options::OPT_fprofile_sample_accurate,

@@ -1059,6 +1059,8 @@ void CodeGenFunction::GenerateCXXGlobalVarDeclInitFunc(llvm::Function *Fn,
   // Emit an artificial location for this function.
   auto AL = ApplyDebugLocation::CreateArtificial(*this);
 
+  emitGlobalConstructorTraceBegin(*D, "staticinit: ");
+
   // Use guarded initialization if the global variable is weak. This
   // occurs for, e.g., instantiated static data members and
   // definitions explicitly marked weak.
@@ -1073,6 +1075,8 @@ void CodeGenFunction::GenerateCXXGlobalVarDeclInitFunc(llvm::Function *Fn,
   } else {
     EmitCXXGlobalVarDeclInit(*D, Addr, PerformInit);
   }
+
+  emitGlobalConstructorTraceEnd();
 
   FinishFunction();
 }
