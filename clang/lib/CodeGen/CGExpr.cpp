@@ -3113,8 +3113,13 @@ static LValue EmitGlobalVarDeclLValue(CodeGenFunction &CGF,
 
   llvm::Value *V = CGF.CGM.GetAddrOfGlobalVar(VD);
 
-  if (VD->getTLSKind() != VarDecl::TLS_None)
+  if (VD->getTLSKind() != VarDecl::TLS_None) {
     V = CGF.Builder.CreateThreadLocalAddress(V);
+  } else if (VD->hasAttr<LazyInitAttr>()) {
+    llvm::Function *InitFn = getOrCreateLazyInitVarInitFunc(
+        CGF.CGM, VD, cast<llvm::GlobalVariable>(V));
+    V = CGF.Builder.CreateCall(InitFn);
+  }
 
   llvm::Type *RealVarTy = CGF.getTypes().ConvertTypeForMem(VD->getType());
   CharUnits Alignment = CGF.getContext().getDeclAlign(VD);

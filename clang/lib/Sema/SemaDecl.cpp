@@ -14835,6 +14835,12 @@ void Sema::CheckCompleteVariableDeclaration(VarDecl *var) {
   QualType baseType = Context.getBaseElementType(type);
   bool HasConstInit = true;
 
+  if (auto *Attr = var->getAttr<LazyInitAttr>())
+    if (!Init || checkConstInit())
+      Diag(var->getLocation(), diag::err_non_dynamic_lazy_init)
+          << var->getSourceRange()
+          << FixItHint::CreateRemoval(Attr->getRange());
+
   if (getLangOpts().C23 && var->isConstexpr() && !Init)
     Diag(var->getLocation(), diag::err_constexpr_var_requires_const_init)
         << var;
@@ -14913,7 +14919,7 @@ void Sema::CheckCompleteVariableDeclaration(VarDecl *var) {
       for (auto &it : Notes)
         Diag(it.first, it.second);
       var->setInvalidDecl();
-    } else if (IsGlobal &&
+    } else if (IsGlobal && !var->hasAttr<LazyInitAttr>() &&
                !getDiagnostics().isIgnored(diag::warn_global_constructor,
                                            var->getLocation())) {
       // Warn about globals which don't have a constant initializer.  Don't

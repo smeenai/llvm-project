@@ -1053,13 +1053,16 @@ void CodeGenFunction::GenerateCXXGlobalVarDeclInitFunc(llvm::Function *Fn,
 
   CurEHLocation = D->getBeginLoc();
 
-  StartFunction(GlobalDecl(D, DynamicInitKind::Initializer),
-                getContext().VoidTy, Fn, getTypes().arrangeNullaryFunction(),
-                FunctionArgList());
+  bool IsLazyInit = D->hasAttr<LazyInitAttr>();
+  const CGFunctionInfo &FI = IsLazyInit ? getLazyInitVarInitFuncInfo(CGM, D)
+                                        : getTypes().arrangeNullaryFunction();
+  StartFunction(GlobalDecl(D, DynamicInitKind::Initializer), FI.getReturnType(),
+                Fn, FI, FunctionArgList());
   // Emit an artificial location for this function.
   auto AL = ApplyDebugLocation::CreateArtificial(*this);
 
-  emitGlobalConstructorTraceBegin(*D, "staticinit: ");
+  if (!IsLazyInit)
+    emitGlobalConstructorTraceBegin(*D, "staticinit: ");
 
   // Use guarded initialization if the global variable is weak. This
   // occurs for, e.g., instantiated static data members and
@@ -1068,7 +1071,7 @@ void CodeGenFunction::GenerateCXXGlobalVarDeclInitFunc(llvm::Function *Fn,
   // Also use guarded initialization for a variable with dynamic TLS and
   // unordered initialization. (If the initialization is ordered, the ABI
   // layer will guard the whole-TU initialization for us.)
-  if (Addr->hasWeakLinkage() || Addr->hasLinkOnceLinkage() ||
+  if (Addr->hasWeakLinkage() || Addr->hasLinkOnceLinkage() || IsLazyInit ||
       (D->getTLSKind() == VarDecl::TLS_Dynamic &&
        isTemplateInstantiation(D->getTemplateSpecializationKind()))) {
     EmitCXXGuardedInit(*D, Addr, PerformInit);
@@ -1076,7 +1079,10 @@ void CodeGenFunction::GenerateCXXGlobalVarDeclInitFunc(llvm::Function *Fn,
     EmitCXXGlobalVarDeclInit(*D, Addr, PerformInit);
   }
 
-  emitGlobalConstructorTraceEnd();
+  if (IsLazyInit)
+    Builder.CreateStore(Addr, ReturnValue);
+  else
+    emitGlobalConstructorTraceEnd();
 
   FinishFunction();
 }

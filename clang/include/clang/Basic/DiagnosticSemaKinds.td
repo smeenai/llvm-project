@@ -753,6 +753,9 @@ def warn_cxx17_compat_exception_spec_in_signature : Warning<
   "mangled name of %0 will change in C++17 due to non-throwing exception "
   "specification in function signature">, InGroup<CXX17CompatMangling>;
 
+def err_non_dynamic_lazy_init: Error<
+  "'lazy_init' attribute only applies to dynamic initializers">;
+
 def warn_global_constructor : Warning<
   "declaration requires a global constructor">,
   InGroup<GlobalConstructors>, DefaultIgnore;

@@ -2044,6 +2044,13 @@ private:
                                                StringRef Suffix);
 };
 
+const CGFunctionInfo &getLazyInitVarInitFuncInfo(CodeGenModule &CGM,
+                                                 const VarDecl *VD);
+
+llvm::Function *getOrCreateLazyInitVarInitFunc(CodeGenModule &CGM,
+                                               const VarDecl *VD,
+                                               const llvm::GlobalVariable *GV);
+
 }  // end namespace CodeGen
 }  // end namespace clang
 

@@ -5847,6 +5847,73 @@ const ABIInfo &CodeGenModule::getABIInfo() {
   return getTargetCodeGenInfo().getABIInfo();
 }
 
+// Implement the lazy_init attribute, which makes the initialization of a global
+// variable occur lazily and replaces loads with a function call to potentially
+// perform the lazy initialization. A few notes on the design:
+// - We want this to be minimally intrusive, since it's very likely not
+//   upstreamable. (Upstream would likely suggest doing a codemod instead, which
+//   we'll also look into.)
+// - We keep the transformation in the frontend for simplicity. This might
+//   negatively affect some optimizations, but it might also give other
+//   optimizations more information; we can change this later if needed.
+// - We don't support the attribute on thread-local or function-static
+//   variables, since the former need a conflicting function call to access and
+//   the latter are already lazily initialized.
+// - The attribute can be applied to public variables (even ones visible across
+//   SOs), in which case it needs to be applied to their declarations so that
+//   all loads go through the lazy init function. Bad things will happen without
+//   any diagnostics if you only apply the attribute to a definition and not its
+//   declaration (if there are accesses via the declaration).
+const CGFunctionInfo &
+clang::CodeGen::getLazyInitVarInitFuncInfo(CodeGenModule &CGM,
+                                           const VarDecl *VD) {
+  QualType RetQT = VD->getType();
+  if (RetQT->isReferenceType())
+    RetQT = RetQT.getNonReferenceType();
+
+  return CGM.getTypes().arrangeBuiltinFunctionDeclaration(
+      CGM.getContext().getPointerType(RetQT), FunctionArgList());
+}
+
+llvm::Function *clang::CodeGen::getOrCreateLazyInitVarInitFunc(
+    CodeGenModule &CGM, const VarDecl *VD, const llvm::GlobalVariable *GV) {
+  SmallString<256> Name(CGM.getMangledName(VD));
+  Name.append(".lazyinit");
+
+  llvm::Function *Fn;
+  if (llvm::Value *V = CGM.getModule().getNamedValue(Name)) {
+    Fn = cast<llvm::Function>(V);
+  } else {
+    const CGFunctionInfo &FI = getLazyInitVarInitFuncInfo(CGM, VD);
+    llvm::FunctionType *FnTy = CGM.getTypes().GetFunctionType(FI);
+    Fn = llvm::Function::Create(FnTy, GV->getLinkage(), Name.str(),
+                                &CGM.getModule());
+    CGM.SetLLVMFunctionAttributes(GlobalDecl(), FI, Fn, /*IsThunk=*/false);
+  }
+
+  // The GV might have all its attributes set correctly the first time this
+  // function is called, so it's important to update the attributes even if the
+  // function has already been created.
+  Fn->setLinkage(GV->getLinkage());
+  Fn->setVisibility(GV->getVisibility());
+  if (GV->hasComdat())
+    Fn->setComdat(CGM.getModule().getOrInsertComdat(Fn->getName()));
+  return Fn;
+}
+
+static void emitLazyInitVarInitFunc(CodeGenModule &CGM, const VarDecl *VD,
+                                    llvm::GlobalVariable *GV) {
+  static llvm::SmallPtrSet<const VarDecl *, 4> InitializedLazyInitVars;
+  auto [it, wasInserted] = InitializedLazyInitVars.insert(VD);
+  if (!wasInserted)
+    return;
+
+  llvm::Function *Fn = getOrCreateLazyInitVarInitFunc(CGM, VD, GV);
+  CGM.SetLLVMFunctionAttributesForDefinition(nullptr, Fn);
+  CodeGenFunction(CGM).GenerateCXXGlobalVarDeclInitFunc(Fn, VD, GV,
+                                                        /*PerformInit=*/true);
+}
+
 /// Pass IsTentative as true if you want to create a tentative definition.
 void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D,
                                             bool IsTentative) {
@@ -6131,7 +6198,9 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D,
   maybeSetTrivialComdat(*D, *GV);
 
   // Emit the initializer function if necessary.
-  if (NeedsGlobalCtor || NeedsGlobalDtor)
+  if (D->hasAttr<LazyInitAttr>())
+    emitLazyInitVarInitFunc(*this, D, GV);
+  else if (NeedsGlobalCtor || NeedsGlobalDtor)
     EmitCXXGlobalVarDeclInitFunc(D, GV, NeedsGlobalCtor);
 
   SanitizerMD->reportGlobal(GV, *D, NeedsGlobalCtor);

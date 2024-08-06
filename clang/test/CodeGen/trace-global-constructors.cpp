@@ -27,6 +27,8 @@ struct AlsoHasConstructor { AlsoHasConstructor(); };
 // TRACE: @trace.init.5 = private unnamed_addr constant [[[#]] x i8] c"staticinit: [[FILENAME]]:[[@LINE+1]]:1\00"
 AlsoHasConstructor globalConstructor3;
 
+[[clang::lazy_init]] HasConstructor lazyInitGlobalConstructor;
+
 // TRACE-LABEL: define dso_local void @_Z15not_constructorv() #[[#]] {
 // TRACE-NEXT:  entry:
 // TRACE-NEXT:    call void @_Z8externalPv(ptr noundef null)
@@ -70,6 +72,10 @@ AlsoHasConstructor globalConstructor3;
 // TRACE-NEXT:    call void @ATrace_endSection()
 // TRACE-NEXT:    ret void
 // TRACE-NEXT:  }
+
+// TRACE-LABEL: define {{.*}} @lazyInitGlobalConstructor.lazyinit()
+// TRACE-NOT:     call void @ATrace_beginSection
+// TRACE-NOT:     call void @ATrace_endSection
 
 // TRACE-LABEL: define {{.*}} @_Z28hasFunctionStaticConstructorv()
 // TRACE-NOT:     call void @ATrace_beginSection

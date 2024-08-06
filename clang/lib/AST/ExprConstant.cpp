@@ -2406,6 +2406,10 @@ static bool CheckLValueConstantExpression(EvalInfo &Info, SourceLocation Loc,
         // FIXME: Diagnostic!
         return false;
 
+      // We need to call the initializer before we can access this.
+      if (Var->hasAttr<LazyInitAttr>())
+        return false;
+
       // A dllimport variable never acts like a constant, unless we're
       // evaluating a value for use only in name mangling.
       if (!isForManglingOnly(Kind) && Var->hasAttr<DLLImportAttr>())

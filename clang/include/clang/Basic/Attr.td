@@ -160,6 +160,13 @@ def NonTLSGlobalVar : SubsetSubject<Var,
                                S->getTLSKind() == 0}],
                              "non-TLS global variables">;
 
+def NonTLSDefinedScalarGlobalVar : SubsetSubject<Var,
+                             [{S->hasGlobalStorage() &&
+                               !S->isStaticLocal() &&
+                               S->getTLSKind() == 0 &&
+                               !S->getType()->isArrayType()}],
+                            "non-TLS defined scalar global variables">;
+
 def InlineFunction : SubsetSubject<Function,
                              [{S->isInlineSpecified()}], "inline functions">;
 
@@ -3856,6 +3863,13 @@ def WarnUnusedResult : InheritableAttr {
       return this->getSemanticSpelling() == CXX11_nodiscard;
     }
   }];
+}
+
+def LazyInit : InheritableAttr {
+  let Spellings = [Clang<"lazy_init">];
+  let Subjects = SubjectList<[NonTLSDefinedScalarGlobalVar], ErrorDiag>;
+  let Documentation = [Undocumented];
+  let SimpleHandler = 1;
 }
 
 def Weak : InheritableAttr {

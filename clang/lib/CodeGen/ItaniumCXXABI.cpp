@@ -2703,8 +2703,9 @@ void ItaniumCXXABI::EmitGuardedInit(CodeGenFunction &CGF,
   // We only need to use thread-safe statics for local non-TLS variables and
   // inline variables; other global initialization is always single-threaded
   // or (through lazy dynamic loading in multiple threads) unsequenced.
+  bool IsLazyInit = D.hasAttr<LazyInitAttr>();
   bool threadsafe = getContext().getLangOpts().ThreadsafeStatics &&
-                    (D.isLocalVarDecl() || NonTemplateInline) &&
+                    (D.isLocalVarDecl() || NonTemplateInline || IsLazyInit) &&
                     !D.getTLSKind();
 
   // If we have a global variable with internal linkage and thread-safe statics
