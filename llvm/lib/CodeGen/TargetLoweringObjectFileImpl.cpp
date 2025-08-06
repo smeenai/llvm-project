@@ -80,6 +80,10 @@ static cl::opt<bool> JumpTableInFunctionSection(
     "jumptable-in-function-section", cl::Hidden, cl::init(false),
     cl::desc("Putting Jump Table in function section"));
 
+namespace llvm {
+extern cl::opt<bool> AArch64EHDataUseGOTPCREL;
+} // namespace llvm
+
 static void GetObjCImageInfo(Module &M, unsigned &Version, unsigned &Flags,
                              StringRef &Section) {
   SmallVector<Module::ModuleFlagEntry, 8> ModuleFlags;
@@ -189,10 +193,12 @@ void TargetLoweringObjectFileELF::Initialize(MCContext &Ctx,
     // pc-relative 32-bit address is insufficient, theoretically.
     //
     // Use DW_EH_PE_indirect even for -fno-pic to avoid copy relocations.
-    LSDAEncoding = dwarf::DW_EH_PE_pcrel |
-                   (TgtM.getTargetTriple().getEnvironment() == Triple::GNUILP32
-                        ? dwarf::DW_EH_PE_sdata4
-                        : dwarf::DW_EH_PE_sdata8);
+    LSDAEncoding =
+        dwarf::DW_EH_PE_pcrel |
+        (TgtM.getTargetTriple().getEnvironment() == Triple::GNUILP32 ||
+                 AArch64EHDataUseGOTPCREL
+             ? dwarf::DW_EH_PE_sdata4
+             : dwarf::DW_EH_PE_sdata8);
     PersonalityEncoding = LSDAEncoding | dwarf::DW_EH_PE_indirect;
     TTypeEncoding = LSDAEncoding | dwarf::DW_EH_PE_indirect;
     break;
@@ -388,6 +394,10 @@ void TargetLoweringObjectFileELF::emitLinkerDirectives(MCStreamer &Streamer,
 MCSymbol *TargetLoweringObjectFileELF::getCFIPersonalitySymbol(
     const GlobalValue *GV, const TargetMachine &TM,
     MachineModuleInfo *MMI) const {
+  if (TM.getTargetTriple().getArch() == Triple::aarch64 &&
+      AArch64EHDataUseGOTPCREL)
+    return TM.getSymbol(GV);
+
   unsigned Encoding = getPersonalityEncoding();
   if ((Encoding & 0x80) == DW_EH_PE_indirect)
     return getContext().getOrCreateSymbol(StringRef("DW.ref.") +
@@ -400,6 +410,10 @@ MCSymbol *TargetLoweringObjectFileELF::getCFIPersonalitySymbol(
 void TargetLoweringObjectFileELF::emitPersonalityValue(
     MCStreamer &Streamer, const DataLayout &DL, const MCSymbol *Sym,
     const MachineModuleInfo *MMI) const {
+  if (Streamer.getContext().getTargetTriple().getArch() == Triple::aarch64 &&
+      AArch64EHDataUseGOTPCREL)
+    return;
+
   SmallString<64> NameData("DW.ref.");
   NameData += Sym->getName();
   auto *Label =
@@ -430,6 +444,11 @@ const MCExpr *TargetLoweringObjectFileELF::getTTypeGlobalReference(
     const GlobalValue *GV, unsigned Encoding, const TargetMachine &TM,
     MachineModuleInfo *MMI, MCStreamer &Streamer) const {
   if (Encoding & DW_EH_PE_indirect) {
+    if (TM.getTargetTriple().getArch() == Triple::aarch64 &&
+        AArch64EHDataUseGOTPCREL)
+      return MCSymbolRefExpr::create(
+          TM.getSymbol(GV), MCSymbolRefExpr::VK_GOTPCREL, getContext());
+
     MachineModuleInfoELF &ELFMMI = MMI->getObjFileInfo<MachineModuleInfoELF>();
 
     MCSymbol *SSym = getSymbolWithGlobalValueBase(GV, ".DW.stub", TM);

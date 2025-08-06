@@ -39,6 +39,10 @@ cl::opt<cl::boolOrDefault> UseLEB128Directives(
     cl::desc(
         "Disable the usage of LEB128 directives, and generate .byte instead."),
     cl::init(cl::BOU_UNSET));
+
+cl::opt<bool> AArch64EHDataUseGOTPCREL(
+    "aarch64-ehdata-use-gotpcrel",
+    cl::desc("Use GOTPCREL relocations for aarch64 EH data"));
 }
 
 MCAsmInfo::MCAsmInfo() {
@@ -79,6 +83,10 @@ const MCExpr *
 MCAsmInfo::getExprForPersonalitySymbol(const MCSymbol *Sym,
                                        unsigned Encoding,
                                        MCStreamer &Streamer) const {
+  if (Streamer.getContext().getTargetTriple().getArch() == Triple::aarch64 &&
+      AArch64EHDataUseGOTPCREL)
+    return MCSymbolRefExpr::create(Sym, MCSymbolRefExpr::VK_GOTPCREL,
+                                   Streamer.getContext());
   return getExprForFDESymbol(Sym, Encoding, Streamer);
 }
 
