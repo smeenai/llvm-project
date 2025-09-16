@@ -25,6 +25,7 @@
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/EndianStream.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/LEB128.h"
@@ -40,6 +41,8 @@
 #include <vector>
 
 using namespace llvm;
+
+static cl::opt<bool> OmitEmptyFDEs("omit-empty-fdes", cl::Hidden);
 
 MCSymbol *mcdwarf::emitListsTableHeaderStart(MCStreamer &S) {
   MCSymbol *Start = S.getContext().createTempSymbol("debug_list_header_start");
@@ -1779,6 +1782,21 @@ void FrameEmitterImpl::EmitFDE(const MCSymbol &cieStart,
                                const MCDwarfFrameInfo &frame,
                                bool LastInSection,
                                const MCSymbol &SectionStart) {
+  if (OmitEmptyFDEs && IsEH && !frame.Lsda) {
+    bool HasValidInstruction = false;
+    for (const MCCFIInstruction &Instr : frame.Instructions) {
+      MCSymbol *Label = Instr.getLabel();
+      // FrameEmitterImpl::emitCFIInstructions skips emitting CFI instructions
+      // which don't match this condition.
+      if (!Label || Label->isDefined()) {
+        HasValidInstruction = true;
+        break;
+      }
+    }
+    if (!HasValidInstruction)
+      return;
+  }
+
   MCContext &context = Streamer.getContext();
   MCSymbol *fdeStart = context.createTempSymbol();
   MCSymbol *fdeEnd = context.createTempSymbol();
