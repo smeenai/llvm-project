@@ -1267,8 +1267,9 @@ bool WinEHPrepareImpl::removeImplausibleInstructions(Function &F) {
 
         // This call site was not part of this funclet, remove it.
         if (isa<InvokeInst>(CB)) {
-          // Remove the unwind edge if it was an invoke.
-          removeUnwindEdge(BB);
+          // First remove the unwind edge and convert the invoke to a
+          // call. Then...delete the call.
+          removeUnwindEdge(BB, RemoveUnwindEdgeMode::Normal);
           // Get a pointer to the new call.
           BasicBlock::iterator CallI =
               std::prev(BB->getTerminator()->getIterator());
@@ -1304,7 +1305,10 @@ bool WinEHPrepareImpl::removeImplausibleInstructions(Function &F) {
           // Invokes within a cleanuppad for the MSVC++ personality never
           // transfer control to their unwind edge: the personality will
           // terminate the program.
-          removeUnwindEdge(BB);
+          //
+          // TODO: switch this to RemoveUnwindEdgeMode::Unwindabort when
+          // adding WinEH unwindabort support.
+          removeUnwindEdge(BB, RemoveUnwindEdgeMode::Normal);
         }
       }
     }

@@ -3032,9 +3032,8 @@ void llvm::InlineFunctionImpl(CallBase &CB, InlineFunctionInfo &IFI,
     }
   }
 
-  // If the call to the callee cannot throw, set the 'nounwind' flag on any
-  // calls that we inline.
   bool MarkNoUnwind = CB.doesNotThrow();
+  bool MarkUnwindAbort = CB.isUnwindAbort();
 
   SmallVector<Value*,4> VarArgsToForward;
   SmallVector<AttributeSet, 4> VarArgsAttrs;
@@ -3057,6 +3056,11 @@ void llvm::InlineFunctionImpl(CallBase &CB, InlineFunctionInfo &IFI,
     for (Function::iterator BB = FirstNewBlock, E = Caller->end(); BB != E;
          ++BB) {
       for (Instruction &I : llvm::make_early_inc_range(*BB)) {
+        if (ResumeInst *RI = dyn_cast<ResumeInst>(&I)) {
+          if (MarkUnwindAbort)
+            RI->setUnwindAbort();
+        }
+
         CallInst *CI = dyn_cast<CallInst>(&I);
         if (!CI)
           continue;
@@ -3118,12 +3122,17 @@ void llvm::InlineFunctionImpl(CallBase &CB, InlineFunctionInfo &IFI,
         CI->setTailCallKind(ChildTCK);
         InlinedMustTailCalls |= CI->isMustTailCall();
 
-        // Call sites inlined through a 'nounwind' call site should be
-        // 'nounwind' as well. However, avoid marking call sites explicitly
-        // where possible. This helps expose more opportunities for CSE after
-        // inlining, commonly when the callee is an intrinsic.
-        if (MarkNoUnwind && !CI->doesNotThrow())
+        // Call sites inlined through a 'nounwind' call should be marked
+        // 'nounwind', unless the inner call was unwindabort (in that case, the
+        // fact that the outer fn can't throw does _not_ imply the inner
+        // function can't throw!)
+        if (MarkNoUnwind && !CI->isUnwindAbort() && !CI->doesNotThrow())
           CI->setDoesNotThrow();
+
+        // Calls inlined through an 'unwindabort' call site should be marked
+        // 'unwindabort'.
+        if (MarkUnwindAbort)
+          CI->setUnwindAbort();
       }
     }
   }

@@ -88,7 +88,7 @@ define i32 @mustprogress_call_known_functions(ptr %ptr) mustprogress {
 ; ATTRIBUTOR: Function Attrs: mustprogress nofree norecurse nosync nounwind willreturn memory(argmem: read)
 ; ATTRIBUTOR-LABEL: @mustprogress_call_known_functions(
 ; ATTRIBUTOR-NEXT:    call void @mustprogress_readnone() #[[ATTR9:[0-9]+]]
-; ATTRIBUTOR-NEXT:    [[R:%.*]] = call i32 @mustprogress_load(ptr nofree readonly captures(none) [[PTR:%.*]]) #[[ATTR12:[0-9]+]]
+; ATTRIBUTOR-NEXT:    [[R:%.*]] = call i32 @mustprogress_load(ptr nofree readonly captures(none) [[PTR:%.*]]) #[[ATTR16:[0-9]+]]
 ; ATTRIBUTOR-NEXT:    ret i32 [[R]]
 ;
   call void @mustprogress_readnone()
@@ -112,7 +112,7 @@ define i64 @mustprogress_mayunwind() mustprogress personality ptr @__gxx_persona
 ;
 ; ATTRIBUTOR: Function Attrs: mustprogress nosync nounwind willreturn memory(none)
 ; ATTRIBUTOR-LABEL: @mustprogress_mayunwind(
-; ATTRIBUTOR-NEXT:    [[A:%.*]] = invoke i64 @fn_noread() #[[ATTR13:[0-9]+]]
+; ATTRIBUTOR-NEXT:    [[A:%.*]] = invoke i64 @fn_noread() #[[ATTR17:[0-9]+]]
 ; ATTRIBUTOR-NEXT:            to label [[A:%.*]] unwind label [[B:%.*]]
 ; ATTRIBUTOR:       A:
 ; ATTRIBUTOR-NEXT:    ret i64 10
@@ -273,3 +273,68 @@ define linkonce i32 @square(i32) {
 
 declare i64 @fn_noread() readnone
 declare void @fn_willreturn() willreturn
+
+
+declare i1 @maybe_raise_exception() uwtable noinline willreturn
+
+; Positive test: an invoke does not block willreturn
+define void @invoke_test() personality ptr @__gxx_personality_v0 {
+; FNATTRS: Function Attrs: mustprogress nounwind willreturn
+; FNATTRS-LABEL: @invoke_test(
+; FNATTRS-NEXT:    [[TMP1:%.*]] = invoke i1 @maybe_raise_exception()
+; FNATTRS-NEXT:            to label [[N:%.*]] unwind label [[F:%.*]]
+; FNATTRS:       N:
+; FNATTRS-NEXT:    ret void
+; FNATTRS:       F:
+; FNATTRS-NEXT:    [[VAL:%.*]] = landingpad { ptr, i32 }
+; FNATTRS-NEXT:            catch ptr null
+; FNATTRS-NEXT:    ret void
+;
+; ATTRIBUTOR: Function Attrs: mustprogress nounwind willreturn
+; ATTRIBUTOR-LABEL: @invoke_test(
+; ATTRIBUTOR-NEXT:    [[TMP1:%.*]] = invoke i1 @maybe_raise_exception() #[[ATTR11]]
+; ATTRIBUTOR-NEXT:            to label [[N:%.*]] unwind label [[F:%.*]]
+; ATTRIBUTOR:       N:
+; ATTRIBUTOR-NEXT:    ret void
+; ATTRIBUTOR:       F:
+; ATTRIBUTOR-NEXT:    [[VAL:%.*]] = landingpad { ptr, i32 }
+; ATTRIBUTOR-NEXT:            catch ptr null
+; ATTRIBUTOR-NEXT:    ret void
+;
+  invoke i1 @maybe_raise_exception()
+  to label %N unwind label %F
+  N:
+  ret void
+  F:
+  %val = landingpad { ptr, i32 }
+  catch ptr null
+  ret void
+}
+
+; Positive test: calling a willreturn function that may unwind is OK:
+; it'll either unwind or return.
+define void @call_unwind_test() noinline uwtable {
+; FNATTRS: Function Attrs: mustprogress noinline willreturn uwtable
+; FNATTRS-LABEL: @call_unwind_test(
+; FNATTRS-NEXT:    [[TMP1:%.*]] = call i1 @maybe_raise_exception()
+; FNATTRS-NEXT:    ret void
+;
+; ATTRIBUTOR: Function Attrs: mustprogress noinline willreturn uwtable
+; ATTRIBUTOR-LABEL: @call_unwind_test(
+; ATTRIBUTOR-NEXT:    [[TMP1:%.*]] = call i1 @maybe_raise_exception() #[[ATTR11]]
+; ATTRIBUTOR-NEXT:    ret void
+;
+  call i1 @maybe_raise_exception()
+  ret void
+}
+
+; Negative test: a 'call unwindabort' is _not_ OK: it may abort.
+define void @callabort_unwind_test() nounwind uwtable noinline personality ptr @__gxx_personality_v0 {
+; COMMON: Function Attrs: noinline nounwind uwtable
+; COMMON-LABEL: @callabort_unwind_test(
+; COMMON-NEXT:    [[TMP1:%.*]] = call unwindabort i1 @maybe_raise_exception()
+; COMMON-NEXT:    ret void
+;
+  call unwindabort i1 @maybe_raise_exception()
+  ret void
+}

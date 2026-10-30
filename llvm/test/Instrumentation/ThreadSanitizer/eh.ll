@@ -13,13 +13,13 @@ define i32 @func1() sanitize_thread {
 ; CHECK-EXC-NEXT:    [[TMP1:%.*]] = call ptr @llvm.returnaddress.p0(i32 0)
 ; CHECK-EXC-NEXT:    call void @__tsan_func_entry(ptr [[TMP1]])
 ; CHECK-EXC-NEXT:    invoke void @can_throw()
-; CHECK-EXC-NEXT:    to label [[DOTNOEXC:%.*]] unwind label [[TSAN_CLEANUP:%.*]]
+; CHECK-EXC-NEXT:            to label [[DOTNOEXC:%.*]] unwind label [[TSAN_CLEANUP:%.*]]
 ; CHECK-EXC:       .noexc:
 ; CHECK-EXC-NEXT:    call void @__tsan_func_exit()
 ; CHECK-EXC-NEXT:    ret i32 0
 ; CHECK-EXC:       tsan_cleanup:
 ; CHECK-EXC-NEXT:    [[CLEANUP_LPAD:%.*]] = landingpad { ptr, i32 }
-; CHECK-EXC-NEXT:    cleanup
+; CHECK-EXC-NEXT:            cleanup
 ; CHECK-EXC-NEXT:    call void @__tsan_func_exit()
 ; CHECK-EXC-NEXT:    resume { ptr, i32 } [[CLEANUP_LPAD]]
 ;
@@ -73,4 +73,97 @@ define i32 @func4() sanitize_thread nounwind {
 ;
   call void @can_throw()
   ret i32 0
+}
+
+define i32 @func5() sanitize_thread personality ptr @__gxx_personality_v0 {
+; CHECK-LABEL: define i32 @func5
+; CHECK-SAME: () #[[ATTR1]] personality ptr @__gxx_personality_v0 {
+; CHECK-NEXT:    [[TMP1:%.*]] = call ptr @llvm.returnaddress.p0(i32 0)
+; CHECK-NEXT:    call void @__tsan_func_entry(ptr [[TMP1]])
+; CHECK-NEXT:    call unwindabort void @can_throw()
+; CHECK-NEXT:    call void @__tsan_func_exit()
+; CHECK-NEXT:    ret i32 0
+;
+  call unwindabort void @can_throw()
+  ret i32 0
+}
+
+declare i1 @maybe_raise_exception() uwtable noinline willreturn
+declare i32 @__gxx_personality_v0(...)
+
+define void @invoke_test() sanitize_thread personality ptr @__gxx_personality_v0  {
+; CHECK-LABEL: define void @invoke_test
+; CHECK-SAME: () #[[ATTR1]] personality ptr @__gxx_personality_v0 {
+; CHECK-NEXT:    [[TMP1:%.*]] = call ptr @llvm.returnaddress.p0(i32 0)
+; CHECK-NEXT:    call void @__tsan_func_entry(ptr [[TMP1]])
+; CHECK-NEXT:    [[TMP2:%.*]] = invoke i1 @maybe_raise_exception()
+; CHECK-NEXT:            to label [[N:%.*]] unwind label [[F:%.*]]
+; CHECK:       N:
+; CHECK-NEXT:    call void @__tsan_func_exit()
+; CHECK-NEXT:    ret void
+; CHECK:       F:
+; CHECK-NEXT:    [[VAL:%.*]] = landingpad { ptr, i32 }
+; CHECK-NEXT:            catch ptr null
+; CHECK-NEXT:    call void @__tsan_func_exit()
+; CHECK-NEXT:    ret void
+;
+  invoke i1 @maybe_raise_exception()
+  to label %N unwind label %F
+  N:
+  ret void
+  F:
+  %val = landingpad { ptr, i32 }
+  catch ptr null
+  ret void
+}
+
+define void @invoke_test2() sanitize_thread personality ptr @__gxx_personality_v0  {
+; CHECK-LABEL: define void @invoke_test2
+; CHECK-SAME: () #[[ATTR1]] personality ptr @__gxx_personality_v0 {
+; CHECK-NEXT:    [[TMP1:%.*]] = call ptr @llvm.returnaddress.p0(i32 0)
+; CHECK-NEXT:    call void @__tsan_func_entry(ptr [[TMP1]])
+; CHECK-NEXT:    [[TMP2:%.*]] = invoke i1 @maybe_raise_exception()
+; CHECK-NEXT:            to label [[N:%.*]] unwind label [[F:%.*]]
+; CHECK:       N:
+; CHECK-NEXT:    call void @__tsan_func_exit()
+; CHECK-NEXT:    ret void
+; CHECK:       F:
+; CHECK-NEXT:    [[VAL:%.*]] = landingpad { ptr, i32 }
+; CHECK-NEXT:            cleanup
+; CHECK-NEXT:    call void @__tsan_func_exit()
+; CHECK-NEXT:    resume { ptr, i32 } [[VAL]]
+;
+  invoke i1 @maybe_raise_exception()
+  to label %N unwind label %F
+  N:
+  ret void
+  F:
+  %val = landingpad { ptr, i32 } cleanup
+
+  resume {ptr, i32 } %val
+}
+
+define void @invoke_test3() sanitize_thread personality ptr @__gxx_personality_v0 {
+; CHECK-LABEL: define void @invoke_test3
+; CHECK-SAME: () #[[ATTR1]] personality ptr @__gxx_personality_v0 {
+; CHECK-NEXT:    [[TMP1:%.*]] = call ptr @llvm.returnaddress.p0(i32 0)
+; CHECK-NEXT:    call void @__tsan_func_entry(ptr [[TMP1]])
+; CHECK-NEXT:    [[TMP2:%.*]] = invoke i1 @maybe_raise_exception()
+; CHECK-NEXT:            to label [[N:%.*]] unwind label [[F:%.*]]
+; CHECK:       N:
+; CHECK-NEXT:    call void @__tsan_func_exit()
+; CHECK-NEXT:    ret void
+; CHECK:       F:
+; CHECK-NEXT:    [[VAL:%.*]] = landingpad { ptr, i32 }
+; CHECK-NEXT:            cleanup
+; CHECK-NEXT:    resume unwindabort { ptr, i32 } [[VAL]]
+;
+  invoke i1 @maybe_raise_exception()
+  to label %N unwind label %F
+  N:
+  ret void
+  F:
+  %val = landingpad { ptr, i32 } cleanup
+
+  resume unwindabort {ptr, i32 } %val
 }

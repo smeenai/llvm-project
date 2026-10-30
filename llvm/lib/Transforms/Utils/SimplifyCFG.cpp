@@ -5749,7 +5749,10 @@ bool SimplifyCFGOpt::simplifyCommonResume(ResumeInst *RI) {
 
     for (BasicBlock *Pred :
          llvm::make_early_inc_range(predecessors(TrivialBB))) {
-      removeUnwindEdge(Pred, DTU);
+      removeUnwindEdge(Pred,
+                       RI->isUnwindAbort() ? RemoveUnwindEdgeMode::Unwindabort
+                                           : RemoveUnwindEdgeMode::Normal,
+                       DTU);
       ++NumInvokes;
     }
 
@@ -5785,7 +5788,10 @@ bool SimplifyCFGOpt::simplifySingleResume(ResumeInst *RI) {
 
   // Turn all invokes that unwind here into calls and delete the basic block.
   for (BasicBlock *Pred : llvm::make_early_inc_range(predecessors(BB))) {
-    removeUnwindEdge(Pred, DTU);
+    removeUnwindEdge(Pred,
+                     RI->isUnwindAbort() ? RemoveUnwindEdgeMode::Unwindabort
+                                         : RemoveUnwindEdgeMode::Normal,
+                     DTU);
     ++NumInvokes;
   }
 
@@ -5885,13 +5891,17 @@ static bool removeEmptyCleanup(CleanupReturnInst *RI, DomTreeUpdater *DTU) {
   // We use make_early_inc_range here because we will remove all predecessors.
   for (BasicBlock *PredBB : llvm::make_early_inc_range(predecessors(BB))) {
     if (UnwindDest == nullptr) {
+      // if cleanupret was previously unwinding to caller, remove the unwind
+      // edge for the predecessor, such that it will unwind to caller directly.
       if (DTU) {
         DTU->applyUpdates(Updates);
         Updates.clear();
       }
-      removeUnwindEdge(PredBB, DTU);
+      removeUnwindEdge(PredBB, RemoveUnwindEdgeMode::Normal, DTU);
       ++NumInvokes;
     } else {
+      // Otherwise, propagate the original unwind-destination into the
+      // predecessor.
       BB->removePredecessor(PredBB);
       Instruction *TI = PredBB->getTerminator();
       TI->replaceUsesOfWith(BB, UnwindDest);
@@ -6066,9 +6076,7 @@ bool SimplifyCFGOpt::simplifyUnreachable(UnreachableInst *UI) {
           DTU->applyUpdates(Updates);
           Updates.clear();
         }
-        auto *CI = cast<CallInst>(removeUnwindEdge(TI->getParent(), DTU));
-        if (!CI->doesNotThrow())
-          CI->setDoesNotThrow();
+        removeUnwindEdge(TI->getParent(), RemoveUnwindEdgeMode::Nounwind, DTU);
         Changed = true;
       }
     } else if (auto *CSI = dyn_cast<CatchSwitchInst>(TI)) {
@@ -6077,7 +6085,7 @@ bool SimplifyCFGOpt::simplifyUnreachable(UnreachableInst *UI) {
           DTU->applyUpdates(Updates);
           Updates.clear();
         }
-        removeUnwindEdge(TI->getParent(), DTU);
+        removeUnwindEdge(TI->getParent(), RemoveUnwindEdgeMode::Nounwind, DTU);
         Changed = true;
         continue;
       }
@@ -6095,6 +6103,7 @@ bool SimplifyCFGOpt::simplifyUnreachable(UnreachableInst *UI) {
       if (DTU)
         Updates.push_back({DominatorTree::Delete, Predecessor, BB});
       if (CSI->getNumHandlers() == 0) {
+        // No switch clauses left: the catchswitch will always unwind.
         if (CSI->hasUnwindDest()) {
           // Redirect all predecessors of the block containing CatchSwitchInst
           // to instead branch to the CatchSwitchInst's unwind destination.
@@ -6109,14 +6118,20 @@ bool SimplifyCFGOpt::simplifyUnreachable(UnreachableInst *UI) {
           }
           Predecessor->replaceAllUsesWith(CSI->getUnwindDest());
         } else {
-          // Rewrite all preds to unwind to caller (or from invoke to call).
+          // Unwind destination is not a block: rewrite all preds to the
+          // appropriate target ('unwind to caller' or unwindabort). This will
+          // e.g. rewrite 'invoke' to 'call'.
           if (DTU) {
             DTU->applyUpdates(Updates);
             Updates.clear();
           }
           SmallVector<BasicBlock *, 8> EHPreds(predecessors(Predecessor));
           for (BasicBlock *EHPred : EHPreds)
-            removeUnwindEdge(EHPred, DTU);
+            removeUnwindEdge(EHPred,
+                             CSI->isUnwindAbort()
+                                 ? RemoveUnwindEdgeMode::Unwindabort
+                                 : RemoveUnwindEdgeMode::Normal,
+                             DTU);
         }
         // The catchswitch is no longer reachable.
         new UnreachableInst(CSI->getContext(), CSI->getIterator());
