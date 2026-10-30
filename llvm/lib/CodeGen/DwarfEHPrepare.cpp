@@ -69,9 +69,8 @@ class DwarfEHPrepare {
 
   /// Replace resumes that are not reachable from a cleanup landing pad with
   /// unreachable and then simplify those blocks.
-  size_t
-  pruneUnreachableResumes(SmallVectorImpl<ResumeInst *> &Resumes,
-                          SmallVectorImpl<LandingPadInst *> &CleanupLPads);
+  void pruneUnreachableResumes(SmallVectorImpl<ResumeInst *> &Resumes,
+                               SmallVectorImpl<LandingPadInst *> &CleanupLPads);
 
   /// Convert the ResumeInsts that are still present
   /// into calls to the appropriate _Unwind_Resume function.
@@ -127,7 +126,7 @@ Value *DwarfEHPrepare::GetExceptionObject(ResumeInst *RI) {
   return ExnObj;
 }
 
-size_t DwarfEHPrepare::pruneUnreachableResumes(
+void DwarfEHPrepare::pruneUnreachableResumes(
     SmallVectorImpl<ResumeInst *> &Resumes,
     SmallVectorImpl<LandingPadInst *> &CleanupLPads) {
   assert(DTU && "Should have DomTreeUpdater here.");
@@ -146,7 +145,7 @@ size_t DwarfEHPrepare::pruneUnreachableResumes(
 
   // If everything is reachable, there is no change.
   if (ResumeReachable.all())
-    return Resumes.size();
+    return;
 
   LLVMContext &Ctx = F.getContext();
 
@@ -164,19 +163,22 @@ size_t DwarfEHPrepare::pruneUnreachableResumes(
     }
   }
   Resumes.resize(ResumesLeft);
-  return ResumesLeft;
 }
 
 bool DwarfEHPrepare::InsertUnwindResumeCalls() {
-  SmallVector<ResumeInst *, 16> Resumes;
+  SmallVector<ResumeInst *, 16> AbortResumes, NormalResumes;
   SmallVector<LandingPadInst *, 16> CleanupLPads;
   if (F.doesNotThrow())
     NumNoUnwind++;
   else
     NumUnwind++;
   for (BasicBlock &BB : F) {
-    if (auto *RI = dyn_cast<ResumeInst>(BB.getTerminator()))
-      Resumes.push_back(RI);
+    if (auto *RI = dyn_cast<ResumeInst>(BB.getTerminator())) {
+      if (RI->isUnwindAbort())
+        AbortResumes.push_back(RI);
+      else
+        NormalResumes.push_back(RI);
+    }
     if (auto *LP = BB.getLandingPadInst())
       if (LP->isCleanup())
         CleanupLPads.push_back(LP);
@@ -184,7 +186,7 @@ bool DwarfEHPrepare::InsertUnwindResumeCalls() {
 
   NumCleanupLandingPadsRemaining += CleanupLPads.size();
 
-  if (Resumes.empty())
+  if (NormalResumes.empty() && AbortResumes.empty())
     return false;
 
   // Check the personality, don't do anything if it's scope-based.
@@ -194,9 +196,9 @@ bool DwarfEHPrepare::InsertUnwindResumeCalls() {
 
   LLVMContext &Ctx = F.getContext();
 
-  size_t ResumesLeft = Resumes.size();
   if (OptLevel != CodeGenOptLevel::None) {
-    ResumesLeft = pruneUnreachableResumes(Resumes, CleanupLPads);
+    pruneUnreachableResumes(NormalResumes, CleanupLPads);
+    pruneUnreachableResumes(AbortResumes, CleanupLPads);
 #if LLVM_ENABLE_STATS
     unsigned NumRemainingLPs = 0;
     for (BasicBlock &BB : F) {
@@ -209,7 +211,7 @@ bool DwarfEHPrepare::InsertUnwindResumeCalls() {
 #endif
   }
 
-  if (ResumesLeft == 0)
+  if (NormalResumes.empty() && AbortResumes.empty())
     return true; // We pruned them all.
 
   // RewindFunction - _Unwind_Resume or the target equivalent.
@@ -236,18 +238,14 @@ bool DwarfEHPrepare::InsertUnwindResumeCalls() {
   }
   RewindFunction = F.getParent()->getOrInsertFunction(RewindName, FTy);
 
-  // Create the basic block where the _Unwind_Resume call will live.
-  if (ResumesLeft == 1) {
-    // Instead of creating a new BB and PHI node, just append the call to
-    // _Unwind_Resume to the end of the single resume block.
-    ResumeInst *RI = Resumes.front();
-    BasicBlock *UnwindBB = RI->getParent();
-    Value *ExnObj = GetExceptionObject(RI);
+  // Helper to create the call instruction
+  auto CreateRewindCall = [&](BasicBlock *UnwindBB, Value *ExnObj,
+                              bool UnwindAbort) {
     llvm::SmallVector<Value *, 1> RewindFunctionArgs;
     if (DoesRewindFunctionNeedExceptionObject)
       RewindFunctionArgs.push_back(ExnObj);
 
-    // Call the rewind function.
+    // Call the function.
     CallInst *CI =
         CallInst::Create(RewindFunction, RewindFunctionArgs, "", UnwindBB);
     // The verifier requires that all calls of debug-info-bearing functions
@@ -257,57 +255,58 @@ bool DwarfEHPrepare::InsertUnwindResumeCalls() {
     if (RewindFn && RewindFn->getSubprogram())
       if (DISubprogram *SP = F.getSubprogram())
         CI->setDebugLoc(DILocation::get(SP->getContext(), 0, 0, SP));
+
     CI->setCallingConv(RewindFunctionCallingConv);
+    CI->setUnwindAbort(UnwindAbort);
 
     // We never expect _Unwind_Resume to return.
     CI->setDoesNotReturn();
     new UnreachableInst(Ctx, UnwindBB);
-    return true;
+  };
+
+  // We may need to insert two separate blocks: one for the lowered 'resume' and
+  // one for the lowered 'resume unwindabort'.
+  for (auto &Resumes : {NormalResumes, AbortResumes}) {
+    if (Resumes.empty())
+      continue;
+    // Each set is homogeneous, so read whether these are unwindabort resumes
+    // now -- GetExceptionObject() below may erase the resume instructions.
+    bool IsUnwindAbort = Resumes.front()->isUnwindAbort();
+    // Create the basic block where the _Unwind_Resume call will live.
+    if (Resumes.size() == 1) {
+      // Instead of creating a new BB and PHI node, just append the call to
+      // _Unwind_Resume to the end of the single resume block.
+      ResumeInst *RI = Resumes.front();
+      BasicBlock *UnwindBB = RI->getParent();
+      Value *ExnObj = GetExceptionObject(RI);
+      CreateRewindCall(UnwindBB, ExnObj, IsUnwindAbort);
+      continue;
+    }
+
+    std::vector<DominatorTree::UpdateType> Updates;
+    Updates.reserve(Resumes.size());
+
+    BasicBlock *UnwindBB = BasicBlock::Create(Ctx, "unwind_resume", &F);
+    PHINode *PN = PHINode::Create(PointerType::getUnqual(Ctx), Resumes.size(),
+                                  "exn.obj", UnwindBB);
+
+    // Extract the exception object from the ResumeInst and add it to the PHI
+    // node that feeds the _Unwind_Resume call.
+    for (ResumeInst *RI : Resumes) {
+      BasicBlock *Parent = RI->getParent();
+      UncondBrInst::Create(UnwindBB, Parent);
+      Updates.push_back({DominatorTree::Insert, Parent, UnwindBB});
+
+      Value *ExnObj = GetExceptionObject(RI);
+      PN->addIncoming(ExnObj, Parent);
+
+      ++NumResumesLowered;
+    }
+
+    CreateRewindCall(UnwindBB, PN, IsUnwindAbort);
+    if (DTU)
+      DTU->applyUpdates(Updates);
   }
-
-  std::vector<DominatorTree::UpdateType> Updates;
-  Updates.reserve(Resumes.size());
-
-  llvm::SmallVector<Value *, 1> RewindFunctionArgs;
-
-  BasicBlock *UnwindBB = BasicBlock::Create(Ctx, "unwind_resume", &F);
-  PHINode *PN = PHINode::Create(PointerType::getUnqual(Ctx), ResumesLeft,
-                                "exn.obj", UnwindBB);
-
-  // Extract the exception object from the ResumeInst and add it to the PHI node
-  // that feeds the _Unwind_Resume call.
-  for (ResumeInst *RI : Resumes) {
-    BasicBlock *Parent = RI->getParent();
-    UncondBrInst::Create(UnwindBB, Parent);
-    Updates.push_back({DominatorTree::Insert, Parent, UnwindBB});
-
-    Value *ExnObj = GetExceptionObject(RI);
-    PN->addIncoming(ExnObj, Parent);
-
-    ++NumResumesLowered;
-  }
-
-  if (DoesRewindFunctionNeedExceptionObject)
-    RewindFunctionArgs.push_back(PN);
-
-  // Call the function.
-  CallInst *CI =
-      CallInst::Create(RewindFunction, RewindFunctionArgs, "", UnwindBB);
-  // The verifier requires that all calls of debug-info-bearing functions
-  // from debug-info-bearing functions have a debug location (for inlining
-  // purposes). Assign a dummy location to satisfy the constraint.
-  Function *RewindFn = dyn_cast<Function>(RewindFunction.getCallee());
-  if (RewindFn && RewindFn->getSubprogram())
-    if (DISubprogram *SP = F.getSubprogram())
-      CI->setDebugLoc(DILocation::get(SP->getContext(), 0, 0, SP));
-  CI->setCallingConv(RewindFunctionCallingConv);
-
-  // We never expect _Unwind_Resume to return.
-  CI->setDoesNotReturn();
-  new UnreachableInst(Ctx, UnwindBB);
-
-  if (DTU)
-    DTU->applyUpdates(Updates);
 
   return true;
 }

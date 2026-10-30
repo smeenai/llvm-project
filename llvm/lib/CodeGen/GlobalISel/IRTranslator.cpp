@@ -3640,16 +3640,32 @@ bool IRTranslatorImpl::translateCall(const User &U,
   if (isa<GCStatepointInst, GCRelocateInst, GCResultInst>(U))
     return false;
 
-  if (CI.isInlineAsm())
-    return translateInlineAsm(CI, MIRBuilder);
-
   Intrinsic::ID ID = F ? F->getIntrinsicID() : Intrinsic::not_intrinsic;
-  if (!F || ID == Intrinsic::not_intrinsic) {
-    if (translateCallBase(CI, MIRBuilder)) {
-      diagnoseDontCall(CI);
-      return true;
+  if (CI.isInlineAsm() || !F || ID == Intrinsic::not_intrinsic) {
+    // An 'unwindabort' call needs EH labels so that it forms a gap in the
+    // LSDA call-site table.
+    bool NeedEHLabel = CI.isUnwindAbort();
+    MCSymbol *BeginSymbol = nullptr;
+    if (NeedEHLabel) {
+      MIRBuilder.buildInstr(TargetOpcode::G_INVOKE_REGION_START);
+      BeginSymbol = MF->getContext().createTempSymbol();
+      MIRBuilder.buildInstr(TargetOpcode::EH_LABEL).addSym(BeginSymbol);
     }
-    return false;
+    if (CI.isInlineAsm()) {
+      if (!translateInlineAsm(CI, MIRBuilder))
+        return false;
+    } else {
+      if (!translateCallBase(CI, MIRBuilder))
+        return false;
+      diagnoseDontCall(CI);
+    }
+
+    if (NeedEHLabel) {
+      MCSymbol *EndSymbol = MF->getContext().createTempSymbol();
+      MIRBuilder.buildInstr(TargetOpcode::EH_LABEL).addSym(EndSymbol);
+      MF->addInvoke(nullptr, BeginSymbol, EndSymbol);
+    }
+    return true;
   }
 
   assert(ID != Intrinsic::not_intrinsic && "unknown intrinsic");

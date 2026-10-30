@@ -350,7 +350,7 @@ static std::pair<SDValue, SDNode *> lowerCallFromStatepointLoweringInfo(
     SelectionDAGBuilder &Builder) {
   SDValue ReturnValue, CallEndVal;
   std::tie(ReturnValue, CallEndVal) =
-      Builder.lowerInvokable(SI.CLI, SI.EHPadBB);
+      Builder.lowerInvokable(SI.CLI, SI.EHPadBB, SI.EHPadBB != nullptr);
   SDNode *CallEnd = CallEndVal.getNode();
 
   // Get a call instruction from the call sequence chain.  Tail calls are not

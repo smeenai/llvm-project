@@ -1548,9 +1548,13 @@ void WinEHPrepareImpl::replaceUseWithLoad(
   }
 }
 
-void WinEHFuncInfo::addIPToStateRange(const InvokeInst *II,
-                                      MCSymbol *InvokeBegin,
+void WinEHFuncInfo::addIPToStateRange(const CallBase *CB, MCSymbol *InvokeBegin,
                                       MCSymbol *InvokeEnd) {
+  // TODO: implement support for 'call unwindabort' in WinEH
+  const InvokeInst *II = dyn_cast<InvokeInst>(CB);
+  if (!II)
+    return;
+
   assert(InvokeStateMap.count(II) &&
          "should get invoke with precomputed state");
   LabelToStateMap[InvokeBegin] = std::make_pair(InvokeStateMap[II], InvokeEnd);

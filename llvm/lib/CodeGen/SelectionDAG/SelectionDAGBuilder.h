@@ -448,7 +448,8 @@ public:
 
   std::pair<SDValue, SDValue>
   lowerInvokable(TargetLowering::CallLoweringInfo &CLI,
-                 const BasicBlock *EHPadBB = nullptr);
+                 const BasicBlock *EHPadBB = nullptr,
+                 bool RequireEHLabels = false);
 
   /// When an MBB was split during scheduling, update the
   /// references that need to refer to the last resulting block.
@@ -747,7 +748,7 @@ public:
                        MCSymbol *&BeginLabel);
 
 private:
-  SDValue lowerEndEH(SDValue Chain, const InvokeInst *II,
+  SDValue lowerEndEH(SDValue Chain, const CallBase *CB,
                      const BasicBlock *EHPadBB, MCSymbol *BeginLabel);
 
   std::pair<bool, bool> getTargetIntrinsicCallProperties(const CallBase &I);
