@@ -37,8 +37,10 @@ void f() noexcept {
 // The throw unwinds to the terminate scope of the enclosing noexcept function.
 // LLVM-LABEL: define{{.*}} void @_Z1fv()
 // LLVM-SAME:    personality ptr @__gxx_personality_v0
-// LLVM:         invoke void @__cxa_throw(ptr %{{.*}}, ptr @_ZTIPDoFvvE, ptr null)
-// LLVM:         landingpad { ptr, i32 }
-// LLVM-NEXT:      catch ptr null
-// LLVM:         call void @__clang_call_terminate(ptr %{{.*}})
-// LLVM-NEXT:    unreachable
+// LLVMCIR:      invoke void @__cxa_throw(ptr %{{.*}}, ptr @_ZTIPDoFvvE, ptr null)
+// LLVMCIR:      landingpad { ptr, i32 }
+// LLVMCIR-NEXT:   catch ptr null
+// LLVMCIR:      call void @__clang_call_terminate(ptr %{{.*}})
+// LLVMCIR-NEXT: unreachable
+// OGCG:         call unwindabort void @__cxa_throw(ptr %{{.*}}, ptr @_ZTIPDoFvvE, ptr null)
+// OGCG-NEXT:    unreachable

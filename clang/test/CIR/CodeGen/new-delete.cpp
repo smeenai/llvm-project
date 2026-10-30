@@ -410,7 +410,7 @@ C *test_new_delete_conditional_with_placement(bool cond, int tag) {
 // OGCG: [[OGP_DO_DEL]]:
 // OGCG:   %[[OGP_LOAD_PTR:.*]] = load ptr, ptr %[[OGP_SAVE_PTR]], align 8
 // OGCG:   %[[OGP_LOAD_TAG:.*]] = load i32, ptr %[[OGP_SAVE_TAG]], align 4
-// OGCG:   invoke void @_ZdlPvi(ptr %[[OGP_LOAD_PTR]], i32 %[[OGP_LOAD_TAG]])
+// OGCG:   call unwindabort void @_ZdlPvi(ptr %[[OGP_LOAD_PTR]], i32 %[[OGP_LOAD_TAG]])
 
 struct D {
   D();
@@ -491,7 +491,7 @@ D *test_new_delete_conditional_with_size(bool cond) {
 // OGCG:   br i1 %[[OGS_ACTIVE]], label %[[OGS_DO_DEL:.*]], label %[[OGS_SKIP_DEL:.*]]
 // OGCG: [[OGS_DO_DEL]]:
 // OGCG:   %[[OGS_LOAD_PTR:.*]] = load ptr, ptr %[[OGS_SAVE]], align 8
-// OGCG:   invoke void @_ZN1DdlEPvm(ptr %[[OGS_LOAD_PTR]], i64 1)
+// OGCG:   call unwindabort void @_ZN1DdlEPvm(ptr %[[OGS_LOAD_PTR]], i64 1)
 
 D *test_new_delete_conditional_array(bool cond, int n) {
   return cond ? new D[n] : 0;
@@ -571,7 +571,7 @@ D *test_new_delete_conditional_array(bool cond, int n) {
 // OGCG: [[OGA_DO_DEL]]:
 // OGCG:   %[[OGA_LOAD_PTR:.*]] = load ptr, ptr %[[OGA_SAVE_PTR]], align 8
 // OGCG:   %[[OGA_LOAD_SIZE:.*]] = load i64, ptr %[[OGA_SAVE_SIZE]], align 8
-// OGCG:   invoke void @_ZN1DdaEPvm(ptr %[[OGA_LOAD_PTR]], i64 %[[OGA_LOAD_SIZE]])
+// OGCG:   call unwindabort void @_ZN1DdaEPvm(ptr %[[OGA_LOAD_PTR]], i64 %[[OGA_LOAD_SIZE]])
 
 // LLVM-DAG: attributes #[[ATTR_BUILTIN_NEW]] = {{{.*}}builtin{{.*}}memory(inaccessiblemem: readwrite, errnomem: write){{.*}}}
 // LLVM-DAG: attributes #[[ATTR_BUILTIN_DEL]] = {{{.*}}builtin{{.*}}}

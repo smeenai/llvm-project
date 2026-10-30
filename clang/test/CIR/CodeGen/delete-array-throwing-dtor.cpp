@@ -186,7 +186,7 @@ void test_delete_array_throwing_dtor(ThrowingDtor *ptr) {
 // LLVM:   unreachable
 //
 // Normal path: compute total size, call `_ZdaPvm`. Mirrors OGCG's
-// `arraydestroy.done8` block.
+// `arraydestroy.done7` block.
 // LLVM: [[CALL_DELETE_NORMAL]]:
 // LLVM:   %[[NORMAL_ARRAY_SIZE:.*]] = mul i64 4, %[[NUM_ELEM]]
 // LLVM:   %[[NORMAL_TOTAL_SIZE:.*]] = add i64 %[[NORMAL_ARRAY_SIZE]], 8
@@ -195,7 +195,7 @@ void test_delete_array_throwing_dtor(ThrowingDtor *ptr) {
 // EH-side delete + resume: the exn/sel are PHI'd one more time as
 // FlattenCFG joins the cleanup-loop exit blocks; then total size is
 // computed, `_ZdaPvm` is called, and the original exception is resumed.
-// Mirrors OGCG's `arraydestroy.done6` -> `eh.resume` chain.
+// Mirrors OGCG's `arraydestroy.done5` -> `eh.resume` chain.
 // LLVM:   %[[RESUME_EXN:.*]] = phi ptr [ %{{.*}}, %{{.*}} ]
 // LLVM:   %[[RESUME_SEL:.*]] = phi i32 [ %{{.*}}, %{{.*}} ]
 // LLVM:   %[[EH_ARRAY_SIZE:.*]] = mul i64 4, %[[NUM_ELEM]]
@@ -250,15 +250,12 @@ void test_delete_array_throwing_dtor(ThrowingDtor *ptr) {
 // OGCG:   br i1 %[[CL_ISEMPTY]], label %[[DONE6:[^,]+]], label %[[BODY2:[^ ]+]]
 //
 // Cleanup loop: phi starts at the element that threw, decrements to the
-// previous element, invokes dtor unwinding to terminate.lpad on a second
-// throw.
+// previous element, calls dtor with unwindabort so that a second throw
+// terminates.
 // OGCG: [[BODY2]]:
-// OGCG:   %[[ELT_PAST3:.*]] = phi ptr [ %[[ELT]], %[[LPAD]] ], [ %[[ELT4:.*]], %[[INV_CONT5:[^ ]+]] ]
+// OGCG:   %[[ELT_PAST3:.*]] = phi ptr [ %[[ELT]], %[[LPAD]] ], [ %[[ELT4:.*]], %[[BODY2]] ]
 // OGCG:   %[[ELT4]] = getelementptr inbounds %struct.ThrowingDtor, ptr %[[ELT_PAST3]], i64 -1
-// OGCG:   invoke void @_ZN12ThrowingDtorD1Ev(ptr {{.*}}%[[ELT4]])
-// OGCG:           to label %[[INV_CONT5]] unwind label %[[TERMINATE_LPAD:[^ ]+]]
-//
-// OGCG: [[INV_CONT5]]:
+// OGCG:   call unwindabort void @_ZN12ThrowingDtorD1Ev(ptr {{.*}}%[[ELT4]])
 // OGCG:   %[[CL_DONE:.*]] = icmp eq ptr %[[ELT4]], %[[PTR]]
 // OGCG:   br i1 %[[CL_DONE]], label %[[DONE6]], label %[[BODY2]]
 //
@@ -271,10 +268,3 @@ void test_delete_array_throwing_dtor(ThrowingDtor *ptr) {
 //
 // OGCG: [[EH_RESUME]]:
 // OGCG:   resume { ptr, i32 }
-//
-// Terminate landing pad.
-// OGCG: [[TERMINATE_LPAD]]:
-// OGCG:   landingpad { ptr, i32 }
-// OGCG:           catch ptr null
-// OGCG:   call void @__clang_call_terminate(ptr {{.*}})
-// OGCG:   unreachable

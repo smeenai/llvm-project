@@ -128,17 +128,14 @@ struct bar {
   ~bar() noexcept(false);
 };
 // global ctor cleanup
+//   The call to fn() is a 'call unwindabort', so only the bar() ctor is an
+//   invoke, and there is no terminate helper.
 // CHECK-LABEL: define {{.*}}global_var_init
-// CHECK: invoke{{ }}
 // CHECK: invoke{{ }}
 // CHECK:   to label {{.*}}, !dbg [[DBG_GLBL_CTOR_B:!.*]]
 
-// terminate caller
-// CHECK-LABEL: define
-
 // global dtor cleanup
 // CHECK-LABEL: define
-// CHECK: invoke{{ }}
 // CHECK: invoke{{ }}
 // CHECK:   to label {{.*}}, !dbg [[DBG_GLBL_DTOR_B:!.*]]
 #line 1200
@@ -313,7 +310,7 @@ void f25() {
 // CHECK: [[DBG_F8]] = !DILocation(line: 900,
 // CHECK: [[DBG_F9]] = !DILocation(line: 1000,
 // CHECK: [[DBG_F10_STORE]] = !DILocation(line: 1100,
-// CHECK: [[DBG_GLBL_CTOR_B]] = !DILocation(line: 1200,
+// CHECK: [[DBG_GLBL_CTOR_B]] = !DILocation(line: 1202,
 // CHECK: [[DBG_GLBL_DTOR_B]] = !DILocation(line: 0,
 // CHECK: [[DBG_F11]] = !DILocation(line: 1300,
 // CHECK: [[DBG_F12]] = !DILocation(line: 1400,

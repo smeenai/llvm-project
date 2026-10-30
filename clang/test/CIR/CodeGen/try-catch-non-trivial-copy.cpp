@@ -257,8 +257,8 @@ int test_non_trivial_exception_copy() {
 // --- OGCG (classic CodeGen reference) ---
 //
 // Classic CodeGen does not synthesize a catch-init thunk; it inlines the
-// `__cxa_get_exception_ptr` + copy ctor invocation at the catch site, with a
-// terminate landing pad on the copy's unwind edge.
+// `__cxa_get_exception_ptr` + copy ctor call at the catch site, marking the
+// copy unwindabort.
 
 // OGCG-LABEL: define {{.*}} i32 @_Z31test_non_trivial_exception_copyv()
 // OGCG:       entry:
@@ -279,10 +279,7 @@ int test_non_trivial_exception_copy() {
 
 // OGCG:       [[O1_CATCH]]:
 // OGCG:         %[[O1_ADJ:.*]] = call ptr @__cxa_get_exception_ptr(ptr %{{.*}})
-// OGCG:         invoke void @_ZN11MyExceptionC1ERKS_(ptr noundef nonnull align 1 dereferenceable(1) %[[O1_E]], ptr noundef nonnull align 1 dereferenceable(1) %[[O1_ADJ]])
-// OGCG:                 to label %[[O1_INVOKE_CONT1:.*]] unwind label %[[O1_TERM:.*]]
-
-// OGCG:       [[O1_INVOKE_CONT1]]:
+// OGCG:         call unwindabort void @_ZN11MyExceptionC1ERKS_(ptr noundef nonnull align 1 dereferenceable(1) %[[O1_E]], ptr noundef nonnull align 1 dereferenceable(1) %[[O1_ADJ]])
 // OGCG:         call ptr @__cxa_begin_catch(
 // OGCG:         invoke noundef i32 @_ZN11MyException3getEv(ptr noundef nonnull align 1 dereferenceable(1) %[[O1_E]])
 // OGCG:                 to label %[[O1_INVOKE_CONT3:.*]] unwind label %[[O1_LPAD2:.*]]
@@ -301,17 +298,10 @@ int test_non_trivial_exception_copy() {
 // OGCG:         landingpad { ptr, i32 }
 // OGCG:                 cleanup
 // OGCG:         call void @_ZN11MyExceptionD1Ev(ptr noundef nonnull align 1 dereferenceable(1) %[[O1_E]])
-// OGCG:         invoke void @__cxa_end_catch()
-// OGCG:                 to label %{{.*}} unwind label %[[O1_TERM]]
+// OGCG:         call unwindabort void @__cxa_end_catch()
 
 // OGCG:       [[EH_RESUME]]:
 // OGCG:         resume { ptr, i32 }
-
-// OGCG:       [[O1_TERM]]:
-// OGCG:         landingpad { ptr, i32 }
-// OGCG:                 catch ptr null
-// OGCG:         call void @__clang_call_terminate(
-// OGCG:         unreachable
 
 //===----------------------------------------------------------------------===//
 // Case 2: Copy constructor with extra (default) arguments.
@@ -502,10 +492,7 @@ int test_copy_ctor_extra_args() {
 
 // OGCG:       [[O2_CATCH]]:
 // OGCG:         %[[O2_ADJ:.*]] = call ptr @__cxa_get_exception_ptr(ptr %{{.*}})
-// OGCG:         invoke void @_ZN11WithDefaultC1ERKS_i(ptr {{.*}} %{{.*}}, ptr {{.*}} %[[O2_ADJ]], i32 {{.*}} 42)
-// OGCG:                 to label %[[O2_INVOKE_CONT1:.*]] unwind label %[[O2_TERM:.*]]
-
-// OGCG:       [[O2_INVOKE_CONT1]]:
+// OGCG:         call unwindabort void @_ZN11WithDefaultC1ERKS_i(ptr {{.*}} %{{.*}}, ptr {{.*}} %[[O2_ADJ]], i32 {{.*}} 42)
 // OGCG:         call ptr @__cxa_begin_catch(
 // OGCG:         store i32 0, ptr %{{.*}}
 // OGCG:         call void @_ZN11WithDefaultD1Ev(
@@ -522,11 +509,6 @@ int test_copy_ctor_extra_args() {
 
 // OGCG:       eh.resume:
 // OGCG:         resume { ptr, i32 }
-
-// OGCG:       [[O2_TERM]]:
-// OGCG:         landingpad { ptr, i32 }
-// OGCG:                 catch ptr null
-// OGCG:         call void @__clang_call_terminate(
 
 //===----------------------------------------------------------------------===//
 // Module-level checks (runtime helpers materialized by EHABI lowering).

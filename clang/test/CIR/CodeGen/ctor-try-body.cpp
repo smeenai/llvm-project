@@ -58,7 +58,7 @@ S::S() try : S(1) {
 // LLVM:   landingpad { ptr, i32 }
 // LLVM:     cleanup
 // LLVMCIR:   call void @__cxa_end_catch()
-// OGCG:   invoke void @__cxa_end_catch()
+// OGCG:   call unwindabort void @__cxa_end_catch()
 // LLVM:   resume { ptr, i32 }
 // LLVM: [[UNREACHABLE_DEST]]:
 // LLVM:   unreachable
@@ -120,7 +120,7 @@ Throws::Throws() try : Throws(1) {
 // LLVM:   landingpad { ptr, i32 }
 // LLVM:     cleanup
 // LLVMCIR:   call void @__cxa_end_catch()
-// OGCG:   invoke void @__cxa_end_catch()
+// OGCG:   call unwindabort void @__cxa_end_catch()
 // LLVM:   resume { ptr, i32 }
 // LLVM: [[UNREACHABLE_DEST]]:
 // LLVM:   unreachable
@@ -199,7 +199,7 @@ struct HasThings : Base {
 // LLVM:   landingpad { ptr, i32 }
 // LLVM:     cleanup
 // LLVMCIR:   call void @__cxa_end_catch()
-// OGCG:   invoke void @__cxa_end_catch()
+// OGCG:   call unwindabort void @__cxa_end_catch()
 };
 
 void foo() {

@@ -288,6 +288,22 @@ llvm::Value *CodeGenFunction::getSelectorFromSlot() {
   return Builder.CreateLoad(getEHSelectorSlot(), "sel");
 }
 
+bool CodeGenFunction::shouldUseUnwindAbort() {
+  // Emscripten's JavaScript-based EH uses the Itanium C++ personality but not
+  // its call-site tables, so an 'unwindabort' call would just propagate.
+  if (getTarget().getTriple().isWasm())
+    return false;
+  return getLangOpts().Exceptions && EHStack.inTerminateScope() &&
+         getEHPersonality(*this).supportsUnwindAbort();
+}
+
+void CodeGenFunction::setupPersonalityFn() {
+  if (!CurFn->hasPersonalityFn()) {
+    const EHPersonality &Personality = getEHPersonality(*this);
+    CurFn->setPersonalityFn(getOpaquePersonalityFn(CGM, Personality));
+  }
+}
+
 void CodeGenFunction::EmitCXXThrowExpr(const CXXThrowExpr *E,
                                        bool KeepInsertionPoint) {
   // If the exception is being emitted in an OpenMP target region,
@@ -662,12 +678,9 @@ llvm::BasicBlock *CodeGenFunction::getInvokeDestImpl() {
   llvm::BasicBlock *LP = EHStack.begin()->getCachedLandingPad();
   if (LP) return LP;
 
-  const EHPersonality &Personality = getEHPersonality(*this);
+  setupPersonalityFn();
 
-  if (!CurFn->hasPersonalityFn())
-    CurFn->setPersonalityFn(getOpaquePersonalityFn(CGM, Personality));
-
-  if (Personality.usesFuncletPads()) {
+  if (getEHPersonality(*this).usesFuncletPads()) {
     // We don't need separate landing pads in the funclet model.
     LP = getEHDispatchBlock(EHStack.getInnermostEHScope());
   } else {
@@ -1429,10 +1442,7 @@ llvm::BasicBlock *CodeGenFunction::getTerminateLandingPad() {
   Builder.SetInsertPoint(TerminateLandingPad);
 
   // Tell the backend that this is a landing pad.
-  const EHPersonality &Personality = getEHPersonality(*this);
-
-  if (!CurFn->hasPersonalityFn())
-    CurFn->setPersonalityFn(getOpaquePersonalityFn(CGM, Personality));
+  setupPersonalityFn();
 
   llvm::LandingPadInst *LPadInst =
       Builder.CreateLandingPad(llvm::StructType::get(Int8PtrTy, Int32Ty), 0);

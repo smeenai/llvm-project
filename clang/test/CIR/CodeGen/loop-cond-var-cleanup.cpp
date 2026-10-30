@@ -1522,8 +1522,7 @@ void while_cond_var_extended_throwing_last() {
 // OGCG-LABEL: define dso_local void @_Z37while_cond_var_extended_throwing_lastv() {{.*}} personality ptr @__gxx_personality_v0 {
 // OGCG:       lpad:
 // OGCG:         call void @_ZN18ThrowingDtorHolderD1Ev(ptr {{.*}} %[[H:[^)]*]])
-// OGCG-NEXT:    invoke void @_ZN12ThrowingDtorD1Ev(ptr {{.*}} %[[TMP:[^)]*]])
-// OGCG-NEXT:            to label %{{.*}} unwind label %terminate.lpad
+// OGCG-NEXT:    call unwindabort void @_ZN12ThrowingDtorD1Ev(ptr {{.*}} %[[TMP:[^)]*]])
 // OGCG:       {{^}}cleanup:
 // OGCG-NEXT:    call void @_ZN18ThrowingDtorHolderD1Ev(ptr {{.*}} %[[H]])
 // OGCG-NEXT:    call void @_ZN12ThrowingDtorD1Ev(ptr {{.*}} %[[TMP]])

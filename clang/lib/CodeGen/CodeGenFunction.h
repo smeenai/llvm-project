@@ -2294,6 +2294,13 @@ public:
     return UnreachableBlock;
   }
 
+  /* Indicates whether we should generate calls using unwindabort, instead of a
+   * terminate landingpad, for the current EH Scope. */
+  bool shouldUseUnwindAbort();
+
+  /* Set the proper unwind personality on the current function. */
+  void setupPersonalityFn();
+
   llvm::BasicBlock *getInvokeDest() {
     if (!EHStack.requiresLandingPad())
       return nullptr;

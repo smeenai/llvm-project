@@ -29,14 +29,14 @@ delegator::delegator(bool)
 // CHECK-LABEL: define {{.*}} @_ZN9delegatorC2Ec
 // CHECK: {{.*}} @_ZN9delegatorC2Eb
 // CHECK: void @__cxa_throw
-// CHECK: void @__clang_call_terminate
-// CHECK: {{.*}} @_ZN9delegatorD2Ev
+//   The destructor cleanup runs as a terminate-scope call, i.e. a
+//   'call unwindabort' rather than via __clang_call_terminate.
+// CHECK: call unwindabort void @_ZN9delegatorD2Ev
 
 // CHECK-LABEL: define {{.*}} @_ZN9delegatorC1Ec
 // CHECK: {{.*}} @_ZN9delegatorC1Eb
 // CHECK: void @__cxa_throw
-// CHECK: void @__clang_call_terminate
-// CHECK: {{.*}} @_ZN9delegatorD1Ev
+// CHECK: call unwindabort void @_ZN9delegatorD1Ev
 delegator::delegator(char)
   : delegator(true) {
   throw 0;
@@ -101,3 +101,5 @@ namespace PR14588 {
   }
 
 }
+
+// CHECK-NOT: @__clang_call_terminate

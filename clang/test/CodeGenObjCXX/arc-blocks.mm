@@ -93,11 +93,8 @@ namespace test1 {
 // CHECK: br label %[[EHCLEANUP:.*]]
 
 // CHECK: [[LPAD3]]:
-// CHECK: invoke void @_ZN5test12S0D1Ev(ptr {{[^,]*}} %[[V12]])
-// CHECK: to label %[[INVOKE_CONT5:.*]] unwind label %[[TERMINATE_LPAD:.*]]
-
-// CHECK: [[INVOKE_CONT5]]:
-// CHECK: br label %[[EHCLEANUP]]
+// CHECK: call unwindabort void @_ZN5test12S0D1Ev(ptr {{[^,]*}} %[[V12]])
+// CHECK-NEXT: br label %[[EHCLEANUP]]
 
 // CHECK: [[EHCLEANUP]]:
 // CHECK: call void @llvm.objc.destroyWeak(ptr %[[V8]])
@@ -108,9 +105,6 @@ namespace test1 {
 
 // CHECK: [[EH_RESUME]]:
 // CHECK: resume { ptr, i32 }
-
-// CHECK: [[TERMINATE_LPAD]]:
-// CHECK: call void @__clang_call_terminate(
 
 // CHECK-O1-LABEL: define linkonce_odr hidden void @__copy_helper_block_ea8_32s40r48w56c15_ZTSN5test12S0E60c15_ZTSN5test12S0E(
 // CHECK-O1: call void @llvm.objc.release({{.*}}) {{.*}} !clang.imprecise_release
@@ -137,13 +131,10 @@ namespace test1 {
 // CHECK: ret void
 
 // CHECK: [[LPAD]]:
-// CHECK: invoke void @_ZN5test12S0D1Ev(ptr {{[^,]*}} %[[V5]])
-// CHECK: to label %[[INVOKE_CONT3:.*]] unwind label %[[TERMINATE_LPAD:.*]]
+// CHECK: call unwindabort void @_ZN5test12S0D1Ev(ptr {{[^,]*}} %[[V5]])
+// CHECK-NEXT: br label %[[EHCLEANUP:.*]]
 
 // CHECK: [[LPAD1]]
-// CHECK: br label %[[EHCLEANUP:.*]]
-
-// CHECK: [[INVOKE_CONT3]]:
 // CHECK: br label %[[EHCLEANUP]]
 
 // CHECK: [[EHCLEANUP]]:
@@ -155,9 +146,6 @@ namespace test1 {
 
 // CHECK: [[EH_RESUME]]:
 // CHECK: resume { ptr, i32 }
-
-// CHECK: [[TERMINATE_LPAD]]:
-// CHECK: call void @__clang_call_terminate(
 
 // CHECK-O1-LABEL: define linkonce_odr hidden void @__destroy_helper_block_ea8_32s40r48w56c15_ZTSN5test12S0E60c15_ZTSN5test12S0E(
 // CHECK-O1: call void @llvm.objc.release({{.*}}) {{.*}} !clang.imprecise_release

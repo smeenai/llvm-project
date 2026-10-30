@@ -398,9 +398,7 @@ int main() {
 // CHECK1-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP9]], 1
 // CHECK1-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK1-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP18]]
-// CHECK1-NEXT:    invoke void @_Z3foov()
-// CHECK1-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP18]]
-// CHECK1:       invoke.cont:
+// CHECK1-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP18]]
 // CHECK1-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK1:       omp.body.continue:
 // CHECK1-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
@@ -421,19 +419,6 @@ int main() {
 // CHECK1-NEXT:    br label [[DOTOMP_FINAL_DONE]]
 // CHECK1:       .omp.final.done:
 // CHECK1-NEXT:    ret void
-// CHECK1:       terminate.lpad:
-// CHECK1-NEXT:    [[TMP13:%.*]] = landingpad { ptr, i32 }
-// CHECK1-NEXT:            catch ptr null
-// CHECK1-NEXT:    [[TMP14:%.*]] = extractvalue { ptr, i32 } [[TMP13]], 0
-// CHECK1-NEXT:    call void @__clang_call_terminate(ptr [[TMP14]]) #[[ATTR12:[0-9]+]], !llvm.access.group [[ACC_GRP18]]
-// CHECK1-NEXT:    unreachable
-//
-//
-// CHECK1-LABEL: define {{[^@]+}}@__clang_call_terminate
-// CHECK1-SAME: (ptr [[TMP0:%.*]]) #[[ATTR7:[0-9]+]] comdat {
-// CHECK1-NEXT:    [[TMP2:%.*]] = call ptr @__cxa_begin_catch(ptr [[TMP0]]) #[[ATTR4]]
-// CHECK1-NEXT:    call void @_ZSt9terminatev() #[[ATTR12]]
-// CHECK1-NEXT:    unreachable
 //
 //
 // CHECK1-LABEL: define {{[^@]+}}@{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}_main_l74
@@ -575,9 +560,7 @@ int main() {
 // CHECK1-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP9]], 1
 // CHECK1-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK1-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP27]]
-// CHECK1-NEXT:    invoke void @_Z3foov()
-// CHECK1-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP27]]
-// CHECK1:       invoke.cont:
+// CHECK1-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP27]]
 // CHECK1-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK1:       omp.body.continue:
 // CHECK1-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
@@ -598,16 +581,10 @@ int main() {
 // CHECK1-NEXT:    br label [[DOTOMP_FINAL_DONE]]
 // CHECK1:       .omp.final.done:
 // CHECK1-NEXT:    ret void
-// CHECK1:       terminate.lpad:
-// CHECK1-NEXT:    [[TMP13:%.*]] = landingpad { ptr, i32 }
-// CHECK1-NEXT:            catch ptr null
-// CHECK1-NEXT:    [[TMP14:%.*]] = extractvalue { ptr, i32 } [[TMP13]], 0
-// CHECK1-NEXT:    call void @__clang_call_terminate(ptr [[TMP14]]) #[[ATTR12]], !llvm.access.group [[ACC_GRP27]]
-// CHECK1-NEXT:    unreachable
 //
 //
 // CHECK1-LABEL: define {{[^@]+}}@_Z5tmainIcLi5EEiv
-// CHECK1-SAME: () #[[ATTR8:[0-9]+]] comdat {
+// CHECK1-SAME: () #[[ATTR7:[0-9]+]] comdat {
 // CHECK1-NEXT:  entry:
 // CHECK1-NEXT:    [[DOTOFFLOAD_BASEPTRS:%.*]] = alloca [1 x ptr], align 8
 // CHECK1-NEXT:    [[DOTOFFLOAD_PTRS:%.*]] = alloca [1 x ptr], align 8
@@ -705,7 +682,7 @@ int main() {
 //
 //
 // CHECK1-LABEL: define {{[^@]+}}@_Z5tmainI1SLi1EEiv
-// CHECK1-SAME: () #[[ATTR8]] comdat {
+// CHECK1-SAME: () #[[ATTR7]] comdat {
 // CHECK1-NEXT:  entry:
 // CHECK1-NEXT:    [[DOTOFFLOAD_BASEPTRS:%.*]] = alloca [1 x ptr], align 8
 // CHECK1-NEXT:    [[DOTOFFLOAD_PTRS:%.*]] = alloca [1 x ptr], align 8
@@ -803,7 +780,7 @@ int main() {
 //
 //
 // CHECK1-LABEL: define {{[^@]+}}@_ZN1SD1Ev
-// CHECK1-SAME: (ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[THIS:%.*]]) unnamed_addr #[[ATTR8]] comdat align 2 {
+// CHECK1-SAME: (ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[THIS:%.*]]) unnamed_addr #[[ATTR7]] comdat align 2 {
 // CHECK1-NEXT:  entry:
 // CHECK1-NEXT:    [[THIS_ADDR:%.*]] = alloca ptr, align 8
 // CHECK1-NEXT:    store ptr [[THIS]], ptr [[THIS_ADDR]], align 8
@@ -813,7 +790,7 @@ int main() {
 //
 //
 // CHECK1-LABEL: define {{[^@]+}}@_ZN1SC2El
-// CHECK1-SAME: (ptr nonnull align 8 dereferenceable(24) [[THIS:%.*]], i64 [[A:%.*]]) unnamed_addr #[[ATTR8]] comdat align 2 {
+// CHECK1-SAME: (ptr nonnull align 8 dereferenceable(24) [[THIS:%.*]], i64 [[A:%.*]]) unnamed_addr #[[ATTR7]] comdat align 2 {
 // CHECK1-NEXT:  entry:
 // CHECK1-NEXT:    [[THIS_ADDR:%.*]] = alloca ptr, align 8
 // CHECK1-NEXT:    [[A_ADDR:%.*]] = alloca i64, align 8
@@ -827,7 +804,7 @@ int main() {
 //
 //
 // CHECK1-LABEL: define {{[^@]+}}@{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__Z5tmainIcLi5EEiv_l52
-// CHECK1-SAME: (ptr noalias [[DYN_PTR:%.*]]) #[[ATTR9:[0-9]+]] {
+// CHECK1-SAME: (ptr noalias [[DYN_PTR:%.*]]) #[[ATTR8:[0-9]+]] {
 // CHECK1-NEXT:  entry:
 // CHECK1-NEXT:    [[DYN_PTR_ADDR:%.*]] = alloca ptr, align 8
 // CHECK1-NEXT:    store ptr [[DYN_PTR]], ptr [[DYN_PTR_ADDR]], align 8
@@ -958,9 +935,7 @@ int main() {
 // CHECK1-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP9]], 1
 // CHECK1-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK1-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP33]]
-// CHECK1-NEXT:    invoke void @_Z3foov()
-// CHECK1-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP33]]
-// CHECK1:       invoke.cont:
+// CHECK1-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP33]]
 // CHECK1-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK1:       omp.body.continue:
 // CHECK1-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
@@ -981,16 +956,10 @@ int main() {
 // CHECK1-NEXT:    br label [[DOTOMP_FINAL_DONE]]
 // CHECK1:       .omp.final.done:
 // CHECK1-NEXT:    ret void
-// CHECK1:       terminate.lpad:
-// CHECK1-NEXT:    [[TMP13:%.*]] = landingpad { ptr, i32 }
-// CHECK1-NEXT:            catch ptr null
-// CHECK1-NEXT:    [[TMP14:%.*]] = extractvalue { ptr, i32 } [[TMP13]], 0
-// CHECK1-NEXT:    call void @__clang_call_terminate(ptr [[TMP14]]) #[[ATTR12]], !llvm.access.group [[ACC_GRP33]]
-// CHECK1-NEXT:    unreachable
 //
 //
 // CHECK1-LABEL: define {{[^@]+}}@{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__Z5tmainIcLi5EEiv_l57
-// CHECK1-SAME: (ptr noalias [[DYN_PTR:%.*]]) #[[ATTR10:[0-9]+]] {
+// CHECK1-SAME: (ptr noalias [[DYN_PTR:%.*]]) #[[ATTR9:[0-9]+]] {
 // CHECK1-NEXT:  entry:
 // CHECK1-NEXT:    [[DYN_PTR_ADDR:%.*]] = alloca ptr, align 8
 // CHECK1-NEXT:    store ptr [[DYN_PTR]], ptr [[DYN_PTR_ADDR]], align 8
@@ -1121,9 +1090,7 @@ int main() {
 // CHECK1-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP9]], 1
 // CHECK1-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK1-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP39]]
-// CHECK1-NEXT:    invoke void @_Z3foov()
-// CHECK1-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP39]]
-// CHECK1:       invoke.cont:
+// CHECK1-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP39]]
 // CHECK1-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK1:       omp.body.continue:
 // CHECK1-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
@@ -1144,16 +1111,10 @@ int main() {
 // CHECK1-NEXT:    br label [[DOTOMP_FINAL_DONE]]
 // CHECK1:       .omp.final.done:
 // CHECK1-NEXT:    ret void
-// CHECK1:       terminate.lpad:
-// CHECK1-NEXT:    [[TMP13:%.*]] = landingpad { ptr, i32 }
-// CHECK1-NEXT:            catch ptr null
-// CHECK1-NEXT:    [[TMP14:%.*]] = extractvalue { ptr, i32 } [[TMP13]], 0
-// CHECK1-NEXT:    call void @__clang_call_terminate(ptr [[TMP14]]) #[[ATTR12]], !llvm.access.group [[ACC_GRP39]]
-// CHECK1-NEXT:    unreachable
 //
 //
 // CHECK1-LABEL: define {{[^@]+}}@{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__Z5tmainI1SLi1EEiv_l52
-// CHECK1-SAME: (ptr noalias [[DYN_PTR:%.*]]) #[[ATTR11:[0-9]+]] {
+// CHECK1-SAME: (ptr noalias [[DYN_PTR:%.*]]) #[[ATTR10:[0-9]+]] {
 // CHECK1-NEXT:  entry:
 // CHECK1-NEXT:    [[DYN_PTR_ADDR:%.*]] = alloca ptr, align 8
 // CHECK1-NEXT:    store ptr [[DYN_PTR]], ptr [[DYN_PTR_ADDR]], align 8
@@ -1284,9 +1245,7 @@ int main() {
 // CHECK1-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP9]], 1
 // CHECK1-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK1-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP45]]
-// CHECK1-NEXT:    invoke void @_Z3foov()
-// CHECK1-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP45]]
-// CHECK1:       invoke.cont:
+// CHECK1-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP45]]
 // CHECK1-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK1:       omp.body.continue:
 // CHECK1-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
@@ -1307,12 +1266,6 @@ int main() {
 // CHECK1-NEXT:    br label [[DOTOMP_FINAL_DONE]]
 // CHECK1:       .omp.final.done:
 // CHECK1-NEXT:    ret void
-// CHECK1:       terminate.lpad:
-// CHECK1-NEXT:    [[TMP13:%.*]] = landingpad { ptr, i32 }
-// CHECK1-NEXT:            catch ptr null
-// CHECK1-NEXT:    [[TMP14:%.*]] = extractvalue { ptr, i32 } [[TMP13]], 0
-// CHECK1-NEXT:    call void @__clang_call_terminate(ptr [[TMP14]]) #[[ATTR12]], !llvm.access.group [[ACC_GRP45]]
-// CHECK1-NEXT:    unreachable
 //
 //
 // CHECK1-LABEL: define {{[^@]+}}@{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__Z5tmainI1SLi1EEiv_l57
@@ -1366,12 +1319,8 @@ int main() {
 // CHECK1-NEXT:    [[CMP1:%.*]] = icmp sle i32 [[TMP5]], [[TMP6]]
 // CHECK1-NEXT:    br i1 [[CMP1]], label [[OMP_INNER_FOR_BODY:%.*]], label [[OMP_INNER_FOR_END:%.*]]
 // CHECK1:       omp.inner.for.body:
-// CHECK1-NEXT:    invoke void @_ZN1SC1El(ptr nonnull align 8 dereferenceable(24) [[REF_TMP]], i64 23)
-// CHECK1-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP48]]
-// CHECK1:       invoke.cont:
-// CHECK1-NEXT:    [[CALL:%.*]] = invoke i8 @_ZN1ScvcEv(ptr nonnull align 8 dereferenceable(24) [[REF_TMP]])
-// CHECK1-NEXT:            to label [[INVOKE_CONT2:%.*]] unwind label [[TERMINATE_LPAD]], !llvm.access.group [[ACC_GRP48]]
-// CHECK1:       invoke.cont2:
+// CHECK1-NEXT:    call unwindabort void @_ZN1SC1El(ptr nonnull align 8 dereferenceable(24) [[REF_TMP]], i64 23), !llvm.access.group [[ACC_GRP48]]
+// CHECK1-NEXT:    [[CALL:%.*]] = call unwindabort i8 @_ZN1ScvcEv(ptr nonnull align 8 dereferenceable(24) [[REF_TMP]]), !llvm.access.group [[ACC_GRP48]]
 // CHECK1-NEXT:    [[TMP7:%.*]] = sext i8 [[CALL]] to i32
 // CHECK1-NEXT:    call void @__kmpc_push_num_threads(ptr @[[GLOB1]], i32 [[TMP1]], i32 [[TMP7]]), !llvm.access.group [[ACC_GRP48]]
 // CHECK1-NEXT:    call void @_ZN1SD1Ev(ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[REF_TMP]]) #[[ATTR4]], !llvm.access.group [[ACC_GRP48]]
@@ -1399,12 +1348,6 @@ int main() {
 // CHECK1-NEXT:    br label [[DOTOMP_FINAL_DONE]]
 // CHECK1:       .omp.final.done:
 // CHECK1-NEXT:    ret void
-// CHECK1:       terminate.lpad:
-// CHECK1-NEXT:    [[TMP16:%.*]] = landingpad { ptr, i32 }
-// CHECK1-NEXT:            catch ptr null
-// CHECK1-NEXT:    [[TMP17:%.*]] = extractvalue { ptr, i32 } [[TMP16]], 0
-// CHECK1-NEXT:    call void @__clang_call_terminate(ptr [[TMP17]]) #[[ATTR12]], !llvm.access.group [[ACC_GRP48]]
-// CHECK1-NEXT:    unreachable
 //
 //
 // CHECK1-LABEL: define {{[^@]+}}@{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__Z5tmainI1SLi1EEiv_l57.omp_outlined.omp_outlined
@@ -1462,9 +1405,7 @@ int main() {
 // CHECK1-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP9]], 1
 // CHECK1-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK1-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP51]]
-// CHECK1-NEXT:    invoke void @_Z3foov()
-// CHECK1-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP51]]
-// CHECK1:       invoke.cont:
+// CHECK1-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP51]]
 // CHECK1-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK1:       omp.body.continue:
 // CHECK1-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
@@ -1485,16 +1426,10 @@ int main() {
 // CHECK1-NEXT:    br label [[DOTOMP_FINAL_DONE]]
 // CHECK1:       .omp.final.done:
 // CHECK1-NEXT:    ret void
-// CHECK1:       terminate.lpad:
-// CHECK1-NEXT:    [[TMP13:%.*]] = landingpad { ptr, i32 }
-// CHECK1-NEXT:            catch ptr null
-// CHECK1-NEXT:    [[TMP14:%.*]] = extractvalue { ptr, i32 } [[TMP13]], 0
-// CHECK1-NEXT:    call void @__clang_call_terminate(ptr [[TMP14]]) #[[ATTR12]], !llvm.access.group [[ACC_GRP51]]
-// CHECK1-NEXT:    unreachable
 //
 //
 // CHECK1-LABEL: define {{[^@]+}}@_ZN1SD2Ev
-// CHECK1-SAME: (ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[THIS:%.*]]) unnamed_addr #[[ATTR8]] comdat align 2 {
+// CHECK1-SAME: (ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[THIS:%.*]]) unnamed_addr #[[ATTR7]] comdat align 2 {
 // CHECK1-NEXT:  entry:
 // CHECK1-NEXT:    [[THIS_ADDR:%.*]] = alloca ptr, align 8
 // CHECK1-NEXT:    store ptr [[THIS]], ptr [[THIS_ADDR]], align 8
@@ -1515,11 +1450,11 @@ int main() {
 // CHECK3-NEXT:    [[DOTOMP_UB:%.*]] = alloca i32, align 4
 // CHECK3-NEXT:    [[DOTOMP_IV:%.*]] = alloca i32, align 4
 // CHECK3-NEXT:    [[I:%.*]] = alloca i32, align 4
-// CHECK3-NEXT:    [[_TMP3:%.*]] = alloca i32, align 4
-// CHECK3-NEXT:    [[DOTOMP_LB4:%.*]] = alloca i32, align 4
-// CHECK3-NEXT:    [[DOTOMP_UB5:%.*]] = alloca i32, align 4
-// CHECK3-NEXT:    [[DOTOMP_IV6:%.*]] = alloca i32, align 4
-// CHECK3-NEXT:    [[I7:%.*]] = alloca i32, align 4
+// CHECK3-NEXT:    [[_TMP2:%.*]] = alloca i32, align 4
+// CHECK3-NEXT:    [[DOTOMP_LB3:%.*]] = alloca i32, align 4
+// CHECK3-NEXT:    [[DOTOMP_UB4:%.*]] = alloca i32, align 4
+// CHECK3-NEXT:    [[DOTOMP_IV5:%.*]] = alloca i32, align 4
+// CHECK3-NEXT:    [[I6:%.*]] = alloca i32, align 4
 // CHECK3-NEXT:    store i32 0, ptr [[RETVAL]], align 4
 // CHECK3-NEXT:    call void @_ZN1SC1El(ptr nonnull align 8 dereferenceable(24) [[S]], i64 0)
 // CHECK3-NEXT:    [[CALL:%.*]] = invoke i8 @_ZN1ScvcEv(ptr nonnull align 8 dereferenceable(24) [[S]])
@@ -1541,16 +1476,14 @@ int main() {
 // CHECK3-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP3]], 1
 // CHECK3-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK3-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP1]]
-// CHECK3-NEXT:    invoke void @_Z3foov()
-// CHECK3-NEXT:            to label [[INVOKE_CONT1:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP1]]
-// CHECK3:       invoke.cont1:
+// CHECK3-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP1]]
 // CHECK3-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK3:       omp.body.continue:
 // CHECK3-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
 // CHECK3:       omp.inner.for.inc:
 // CHECK3-NEXT:    [[TMP4:%.*]] = load i32, ptr [[DOTOMP_IV]], align 4, !llvm.access.group [[ACC_GRP1]]
-// CHECK3-NEXT:    [[ADD2:%.*]] = add nsw i32 [[TMP4]], 1
-// CHECK3-NEXT:    store i32 [[ADD2]], ptr [[DOTOMP_IV]], align 4, !llvm.access.group [[ACC_GRP1]]
+// CHECK3-NEXT:    [[ADD1:%.*]] = add nsw i32 [[TMP4]], 1
+// CHECK3-NEXT:    store i32 [[ADD1]], ptr [[DOTOMP_IV]], align 4, !llvm.access.group [[ACC_GRP1]]
 // CHECK3-NEXT:    br label [[OMP_INNER_FOR_COND]], !llvm.loop [[LOOP2:![0-9]+]]
 // CHECK3:       lpad:
 // CHECK3-NEXT:    [[TMP5:%.*]] = landingpad { ptr, i32 }
@@ -1559,64 +1492,56 @@ int main() {
 // CHECK3-NEXT:    store ptr [[TMP6]], ptr [[EXN_SLOT]], align 8
 // CHECK3-NEXT:    [[TMP7:%.*]] = extractvalue { ptr, i32 } [[TMP5]], 1
 // CHECK3-NEXT:    store i32 [[TMP7]], ptr [[EHSELECTOR_SLOT]], align 4
-// CHECK3-NEXT:    call void @_ZN1SD1Ev(ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[S]]) #[[ATTR5:[0-9]+]]
+// CHECK3-NEXT:    call void @_ZN1SD1Ev(ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[S]]) #[[ATTR4:[0-9]+]]
 // CHECK3-NEXT:    br label [[EH_RESUME:%.*]]
 // CHECK3:       omp.inner.for.end:
 // CHECK3-NEXT:    store i32 100, ptr [[I]], align 4
-// CHECK3-NEXT:    store i32 0, ptr [[DOTOMP_LB4]], align 4
-// CHECK3-NEXT:    store i32 99, ptr [[DOTOMP_UB5]], align 4
-// CHECK3-NEXT:    [[TMP8:%.*]] = load i32, ptr [[DOTOMP_LB4]], align 4
-// CHECK3-NEXT:    store i32 [[TMP8]], ptr [[DOTOMP_IV6]], align 4
-// CHECK3-NEXT:    br label [[OMP_INNER_FOR_COND8:%.*]]
-// CHECK3:       omp.inner.for.cond8:
-// CHECK3-NEXT:    [[TMP9:%.*]] = load i32, ptr [[DOTOMP_IV6]], align 4, !llvm.access.group [[ACC_GRP5:![0-9]+]]
-// CHECK3-NEXT:    [[TMP10:%.*]] = load i32, ptr [[DOTOMP_UB5]], align 4, !llvm.access.group [[ACC_GRP5]]
-// CHECK3-NEXT:    [[CMP9:%.*]] = icmp sle i32 [[TMP9]], [[TMP10]]
-// CHECK3-NEXT:    br i1 [[CMP9]], label [[OMP_INNER_FOR_BODY10:%.*]], label [[OMP_INNER_FOR_END17:%.*]]
-// CHECK3:       omp.inner.for.body10:
-// CHECK3-NEXT:    [[TMP11:%.*]] = load i32, ptr [[DOTOMP_IV6]], align 4, !llvm.access.group [[ACC_GRP5]]
-// CHECK3-NEXT:    [[MUL11:%.*]] = mul nsw i32 [[TMP11]], 1
-// CHECK3-NEXT:    [[ADD12:%.*]] = add nsw i32 0, [[MUL11]]
-// CHECK3-NEXT:    store i32 [[ADD12]], ptr [[I7]], align 4, !llvm.access.group [[ACC_GRP5]]
-// CHECK3-NEXT:    invoke void @_Z3foov()
-// CHECK3-NEXT:            to label [[INVOKE_CONT13:%.*]] unwind label [[TERMINATE_LPAD]], !llvm.access.group [[ACC_GRP5]]
-// CHECK3:       invoke.cont13:
-// CHECK3-NEXT:    br label [[OMP_BODY_CONTINUE14:%.*]]
-// CHECK3:       omp.body.continue14:
-// CHECK3-NEXT:    br label [[OMP_INNER_FOR_INC15:%.*]]
-// CHECK3:       omp.inner.for.inc15:
-// CHECK3-NEXT:    [[TMP12:%.*]] = load i32, ptr [[DOTOMP_IV6]], align 4, !llvm.access.group [[ACC_GRP5]]
-// CHECK3-NEXT:    [[ADD16:%.*]] = add nsw i32 [[TMP12]], 1
-// CHECK3-NEXT:    store i32 [[ADD16]], ptr [[DOTOMP_IV6]], align 4, !llvm.access.group [[ACC_GRP5]]
-// CHECK3-NEXT:    br label [[OMP_INNER_FOR_COND8]], !llvm.loop [[LOOP6:![0-9]+]]
-// CHECK3:       omp.inner.for.end17:
-// CHECK3-NEXT:    store i32 100, ptr [[I7]], align 4
+// CHECK3-NEXT:    store i32 0, ptr [[DOTOMP_LB3]], align 4
+// CHECK3-NEXT:    store i32 99, ptr [[DOTOMP_UB4]], align 4
+// CHECK3-NEXT:    [[TMP8:%.*]] = load i32, ptr [[DOTOMP_LB3]], align 4
+// CHECK3-NEXT:    store i32 [[TMP8]], ptr [[DOTOMP_IV5]], align 4
+// CHECK3-NEXT:    br label [[OMP_INNER_FOR_COND7:%.*]]
+// CHECK3:       omp.inner.for.cond7:
+// CHECK3-NEXT:    [[TMP9:%.*]] = load i32, ptr [[DOTOMP_IV5]], align 4, !llvm.access.group [[ACC_GRP5:![0-9]+]]
+// CHECK3-NEXT:    [[TMP10:%.*]] = load i32, ptr [[DOTOMP_UB4]], align 4, !llvm.access.group [[ACC_GRP5]]
+// CHECK3-NEXT:    [[CMP8:%.*]] = icmp sle i32 [[TMP9]], [[TMP10]]
+// CHECK3-NEXT:    br i1 [[CMP8]], label [[OMP_INNER_FOR_BODY9:%.*]], label [[OMP_INNER_FOR_END15:%.*]]
+// CHECK3:       omp.inner.for.body9:
+// CHECK3-NEXT:    [[TMP11:%.*]] = load i32, ptr [[DOTOMP_IV5]], align 4, !llvm.access.group [[ACC_GRP5]]
+// CHECK3-NEXT:    [[MUL10:%.*]] = mul nsw i32 [[TMP11]], 1
+// CHECK3-NEXT:    [[ADD11:%.*]] = add nsw i32 0, [[MUL10]]
+// CHECK3-NEXT:    store i32 [[ADD11]], ptr [[I6]], align 4, !llvm.access.group [[ACC_GRP5]]
+// CHECK3-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP5]]
+// CHECK3-NEXT:    br label [[OMP_BODY_CONTINUE12:%.*]]
+// CHECK3:       omp.body.continue12:
+// CHECK3-NEXT:    br label [[OMP_INNER_FOR_INC13:%.*]]
+// CHECK3:       omp.inner.for.inc13:
+// CHECK3-NEXT:    [[TMP12:%.*]] = load i32, ptr [[DOTOMP_IV5]], align 4, !llvm.access.group [[ACC_GRP5]]
+// CHECK3-NEXT:    [[ADD14:%.*]] = add nsw i32 [[TMP12]], 1
+// CHECK3-NEXT:    store i32 [[ADD14]], ptr [[DOTOMP_IV5]], align 4, !llvm.access.group [[ACC_GRP5]]
+// CHECK3-NEXT:    br label [[OMP_INNER_FOR_COND7]], !llvm.loop [[LOOP6:![0-9]+]]
+// CHECK3:       omp.inner.for.end15:
+// CHECK3-NEXT:    store i32 100, ptr [[I6]], align 4
 // CHECK3-NEXT:    [[TMP13:%.*]] = load i8, ptr [[A]], align 1
 // CHECK3-NEXT:    [[CONV:%.*]] = sext i8 [[TMP13]] to i32
-// CHECK3-NEXT:    [[CALL19:%.*]] = invoke i32 @_Z5tmainIcLi5EEiv()
-// CHECK3-NEXT:            to label [[INVOKE_CONT18:%.*]] unwind label [[LPAD]]
-// CHECK3:       invoke.cont18:
-// CHECK3-NEXT:    [[ADD20:%.*]] = add nsw i32 [[CONV]], [[CALL19]]
-// CHECK3-NEXT:    [[CALL22:%.*]] = invoke i32 @_Z5tmainI1SLi1EEiv()
-// CHECK3-NEXT:            to label [[INVOKE_CONT21:%.*]] unwind label [[LPAD]]
-// CHECK3:       invoke.cont21:
-// CHECK3-NEXT:    [[ADD23:%.*]] = add nsw i32 [[ADD20]], [[CALL22]]
-// CHECK3-NEXT:    store i32 [[ADD23]], ptr [[RETVAL]], align 4
-// CHECK3-NEXT:    call void @_ZN1SD1Ev(ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[S]]) #[[ATTR5]]
+// CHECK3-NEXT:    [[CALL17:%.*]] = invoke i32 @_Z5tmainIcLi5EEiv()
+// CHECK3-NEXT:            to label [[INVOKE_CONT16:%.*]] unwind label [[LPAD]]
+// CHECK3:       invoke.cont16:
+// CHECK3-NEXT:    [[ADD18:%.*]] = add nsw i32 [[CONV]], [[CALL17]]
+// CHECK3-NEXT:    [[CALL20:%.*]] = invoke i32 @_Z5tmainI1SLi1EEiv()
+// CHECK3-NEXT:            to label [[INVOKE_CONT19:%.*]] unwind label [[LPAD]]
+// CHECK3:       invoke.cont19:
+// CHECK3-NEXT:    [[ADD21:%.*]] = add nsw i32 [[ADD18]], [[CALL20]]
+// CHECK3-NEXT:    store i32 [[ADD21]], ptr [[RETVAL]], align 4
+// CHECK3-NEXT:    call void @_ZN1SD1Ev(ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[S]]) #[[ATTR4]]
 // CHECK3-NEXT:    [[TMP14:%.*]] = load i32, ptr [[RETVAL]], align 4
 // CHECK3-NEXT:    ret i32 [[TMP14]]
 // CHECK3:       eh.resume:
 // CHECK3-NEXT:    [[EXN:%.*]] = load ptr, ptr [[EXN_SLOT]], align 8
 // CHECK3-NEXT:    [[SEL:%.*]] = load i32, ptr [[EHSELECTOR_SLOT]], align 4
 // CHECK3-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } poison, ptr [[EXN]], 0
-// CHECK3-NEXT:    [[LPAD_VAL24:%.*]] = insertvalue { ptr, i32 } [[LPAD_VAL]], i32 [[SEL]], 1
-// CHECK3-NEXT:    resume { ptr, i32 } [[LPAD_VAL24]]
-// CHECK3:       terminate.lpad:
-// CHECK3-NEXT:    [[TMP15:%.*]] = landingpad { ptr, i32 }
-// CHECK3-NEXT:            catch ptr null
-// CHECK3-NEXT:    [[TMP16:%.*]] = extractvalue { ptr, i32 } [[TMP15]], 0
-// CHECK3-NEXT:    call void @__clang_call_terminate(ptr [[TMP16]]) #[[ATTR6:[0-9]+]], !llvm.access.group [[ACC_GRP1]]
-// CHECK3-NEXT:    unreachable
+// CHECK3-NEXT:    [[LPAD_VAL22:%.*]] = insertvalue { ptr, i32 } [[LPAD_VAL]], i32 [[SEL]], 1
+// CHECK3-NEXT:    resume { ptr, i32 } [[LPAD_VAL22]]
 //
 //
 // CHECK3-LABEL: define {{[^@]+}}@_ZN1SC1El
@@ -1645,15 +1570,8 @@ int main() {
 // CHECK3-NEXT:    ret i8 [[CONV]]
 //
 //
-// CHECK3-LABEL: define {{[^@]+}}@__clang_call_terminate
-// CHECK3-SAME: (ptr [[TMP0:%.*]]) #[[ATTR3:[0-9]+]] comdat {
-// CHECK3-NEXT:    [[TMP2:%.*]] = call ptr @__cxa_begin_catch(ptr [[TMP0]]) #[[ATTR5]]
-// CHECK3-NEXT:    call void @_ZSt9terminatev() #[[ATTR6]]
-// CHECK3-NEXT:    unreachable
-//
-//
 // CHECK3-LABEL: define {{[^@]+}}@_Z5tmainIcLi5EEiv
-// CHECK3-SAME: () #[[ATTR4:[0-9]+]] comdat personality ptr @__gxx_personality_v0 {
+// CHECK3-SAME: () #[[ATTR1]] comdat personality ptr @__gxx_personality_v0 {
 // CHECK3-NEXT:  entry:
 // CHECK3-NEXT:    [[TMP:%.*]] = alloca i32, align 4
 // CHECK3-NEXT:    [[DOTOMP_LB:%.*]] = alloca i32, align 4
@@ -1680,9 +1598,7 @@ int main() {
 // CHECK3-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP3]], 1
 // CHECK3-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK3-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP8]]
-// CHECK3-NEXT:    invoke void @_Z3foov()
-// CHECK3-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP8]]
-// CHECK3:       invoke.cont:
+// CHECK3-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP8]]
 // CHECK3-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK3:       omp.body.continue:
 // CHECK3-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
@@ -1702,36 +1618,28 @@ int main() {
 // CHECK3-NEXT:    [[TMP6:%.*]] = load i32, ptr [[DOTOMP_IV5]], align 4, !llvm.access.group [[ACC_GRP11:![0-9]+]]
 // CHECK3-NEXT:    [[TMP7:%.*]] = load i32, ptr [[DOTOMP_UB4]], align 4, !llvm.access.group [[ACC_GRP11]]
 // CHECK3-NEXT:    [[CMP8:%.*]] = icmp sle i32 [[TMP6]], [[TMP7]]
-// CHECK3-NEXT:    br i1 [[CMP8]], label [[OMP_INNER_FOR_BODY9:%.*]], label [[OMP_INNER_FOR_END16:%.*]]
+// CHECK3-NEXT:    br i1 [[CMP8]], label [[OMP_INNER_FOR_BODY9:%.*]], label [[OMP_INNER_FOR_END15:%.*]]
 // CHECK3:       omp.inner.for.body9:
 // CHECK3-NEXT:    [[TMP8:%.*]] = load i32, ptr [[DOTOMP_IV5]], align 4, !llvm.access.group [[ACC_GRP11]]
 // CHECK3-NEXT:    [[MUL10:%.*]] = mul nsw i32 [[TMP8]], 1
 // CHECK3-NEXT:    [[ADD11:%.*]] = add nsw i32 0, [[MUL10]]
 // CHECK3-NEXT:    store i32 [[ADD11]], ptr [[I6]], align 4, !llvm.access.group [[ACC_GRP11]]
-// CHECK3-NEXT:    invoke void @_Z3foov()
-// CHECK3-NEXT:            to label [[INVOKE_CONT12:%.*]] unwind label [[TERMINATE_LPAD]], !llvm.access.group [[ACC_GRP11]]
-// CHECK3:       invoke.cont12:
-// CHECK3-NEXT:    br label [[OMP_BODY_CONTINUE13:%.*]]
-// CHECK3:       omp.body.continue13:
-// CHECK3-NEXT:    br label [[OMP_INNER_FOR_INC14:%.*]]
-// CHECK3:       omp.inner.for.inc14:
+// CHECK3-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP11]]
+// CHECK3-NEXT:    br label [[OMP_BODY_CONTINUE12:%.*]]
+// CHECK3:       omp.body.continue12:
+// CHECK3-NEXT:    br label [[OMP_INNER_FOR_INC13:%.*]]
+// CHECK3:       omp.inner.for.inc13:
 // CHECK3-NEXT:    [[TMP9:%.*]] = load i32, ptr [[DOTOMP_IV5]], align 4, !llvm.access.group [[ACC_GRP11]]
-// CHECK3-NEXT:    [[ADD15:%.*]] = add nsw i32 [[TMP9]], 1
-// CHECK3-NEXT:    store i32 [[ADD15]], ptr [[DOTOMP_IV5]], align 4, !llvm.access.group [[ACC_GRP11]]
+// CHECK3-NEXT:    [[ADD14:%.*]] = add nsw i32 [[TMP9]], 1
+// CHECK3-NEXT:    store i32 [[ADD14]], ptr [[DOTOMP_IV5]], align 4, !llvm.access.group [[ACC_GRP11]]
 // CHECK3-NEXT:    br label [[OMP_INNER_FOR_COND7]], !llvm.loop [[LOOP12:![0-9]+]]
-// CHECK3:       omp.inner.for.end16:
+// CHECK3:       omp.inner.for.end15:
 // CHECK3-NEXT:    store i32 100, ptr [[I6]], align 4
 // CHECK3-NEXT:    ret i32 0
-// CHECK3:       terminate.lpad:
-// CHECK3-NEXT:    [[TMP10:%.*]] = landingpad { ptr, i32 }
-// CHECK3-NEXT:            catch ptr null
-// CHECK3-NEXT:    [[TMP11:%.*]] = extractvalue { ptr, i32 } [[TMP10]], 0
-// CHECK3-NEXT:    call void @__clang_call_terminate(ptr [[TMP11]]) #[[ATTR6]], !llvm.access.group [[ACC_GRP8]]
-// CHECK3-NEXT:    unreachable
 //
 //
 // CHECK3-LABEL: define {{[^@]+}}@_Z5tmainI1SLi1EEiv
-// CHECK3-SAME: () #[[ATTR4]] comdat personality ptr @__gxx_personality_v0 {
+// CHECK3-SAME: () #[[ATTR1]] comdat personality ptr @__gxx_personality_v0 {
 // CHECK3-NEXT:  entry:
 // CHECK3-NEXT:    [[TMP:%.*]] = alloca i32, align 4
 // CHECK3-NEXT:    [[DOTOMP_LB:%.*]] = alloca i32, align 4
@@ -1758,9 +1666,7 @@ int main() {
 // CHECK3-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP3]], 1
 // CHECK3-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK3-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP14]]
-// CHECK3-NEXT:    invoke void @_Z3foov()
-// CHECK3-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP14]]
-// CHECK3:       invoke.cont:
+// CHECK3-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP14]]
 // CHECK3-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK3:       omp.body.continue:
 // CHECK3-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
@@ -1780,46 +1686,38 @@ int main() {
 // CHECK3-NEXT:    [[TMP6:%.*]] = load i32, ptr [[DOTOMP_IV5]], align 4, !llvm.access.group [[ACC_GRP17:![0-9]+]]
 // CHECK3-NEXT:    [[TMP7:%.*]] = load i32, ptr [[DOTOMP_UB4]], align 4, !llvm.access.group [[ACC_GRP17]]
 // CHECK3-NEXT:    [[CMP8:%.*]] = icmp sle i32 [[TMP6]], [[TMP7]]
-// CHECK3-NEXT:    br i1 [[CMP8]], label [[OMP_INNER_FOR_BODY9:%.*]], label [[OMP_INNER_FOR_END16:%.*]]
+// CHECK3-NEXT:    br i1 [[CMP8]], label [[OMP_INNER_FOR_BODY9:%.*]], label [[OMP_INNER_FOR_END15:%.*]]
 // CHECK3:       omp.inner.for.body9:
 // CHECK3-NEXT:    [[TMP8:%.*]] = load i32, ptr [[DOTOMP_IV5]], align 4, !llvm.access.group [[ACC_GRP17]]
 // CHECK3-NEXT:    [[MUL10:%.*]] = mul nsw i32 [[TMP8]], 1
 // CHECK3-NEXT:    [[ADD11:%.*]] = add nsw i32 0, [[MUL10]]
 // CHECK3-NEXT:    store i32 [[ADD11]], ptr [[I6]], align 4, !llvm.access.group [[ACC_GRP17]]
-// CHECK3-NEXT:    invoke void @_Z3foov()
-// CHECK3-NEXT:            to label [[INVOKE_CONT12:%.*]] unwind label [[TERMINATE_LPAD]], !llvm.access.group [[ACC_GRP17]]
-// CHECK3:       invoke.cont12:
-// CHECK3-NEXT:    br label [[OMP_BODY_CONTINUE13:%.*]]
-// CHECK3:       omp.body.continue13:
-// CHECK3-NEXT:    br label [[OMP_INNER_FOR_INC14:%.*]]
-// CHECK3:       omp.inner.for.inc14:
+// CHECK3-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP17]]
+// CHECK3-NEXT:    br label [[OMP_BODY_CONTINUE12:%.*]]
+// CHECK3:       omp.body.continue12:
+// CHECK3-NEXT:    br label [[OMP_INNER_FOR_INC13:%.*]]
+// CHECK3:       omp.inner.for.inc13:
 // CHECK3-NEXT:    [[TMP9:%.*]] = load i32, ptr [[DOTOMP_IV5]], align 4, !llvm.access.group [[ACC_GRP17]]
-// CHECK3-NEXT:    [[ADD15:%.*]] = add nsw i32 [[TMP9]], 1
-// CHECK3-NEXT:    store i32 [[ADD15]], ptr [[DOTOMP_IV5]], align 4, !llvm.access.group [[ACC_GRP17]]
+// CHECK3-NEXT:    [[ADD14:%.*]] = add nsw i32 [[TMP9]], 1
+// CHECK3-NEXT:    store i32 [[ADD14]], ptr [[DOTOMP_IV5]], align 4, !llvm.access.group [[ACC_GRP17]]
 // CHECK3-NEXT:    br label [[OMP_INNER_FOR_COND7]], !llvm.loop [[LOOP18:![0-9]+]]
-// CHECK3:       omp.inner.for.end16:
+// CHECK3:       omp.inner.for.end15:
 // CHECK3-NEXT:    store i32 100, ptr [[I6]], align 4
 // CHECK3-NEXT:    ret i32 0
-// CHECK3:       terminate.lpad:
-// CHECK3-NEXT:    [[TMP10:%.*]] = landingpad { ptr, i32 }
-// CHECK3-NEXT:            catch ptr null
-// CHECK3-NEXT:    [[TMP11:%.*]] = extractvalue { ptr, i32 } [[TMP10]], 0
-// CHECK3-NEXT:    call void @__clang_call_terminate(ptr [[TMP11]]) #[[ATTR6]], !llvm.access.group [[ACC_GRP14]]
-// CHECK3-NEXT:    unreachable
 //
 //
 // CHECK3-LABEL: define {{[^@]+}}@_ZN1SD1Ev
-// CHECK3-SAME: (ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[THIS:%.*]]) unnamed_addr #[[ATTR4]] comdat align 2 {
+// CHECK3-SAME: (ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[THIS:%.*]]) unnamed_addr #[[ATTR3:[0-9]+]] comdat align 2 {
 // CHECK3-NEXT:  entry:
 // CHECK3-NEXT:    [[THIS_ADDR:%.*]] = alloca ptr, align 8
 // CHECK3-NEXT:    store ptr [[THIS]], ptr [[THIS_ADDR]], align 8
 // CHECK3-NEXT:    [[THIS1:%.*]] = load ptr, ptr [[THIS_ADDR]], align 8
-// CHECK3-NEXT:    call void @_ZN1SD2Ev(ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[THIS1]]) #[[ATTR5]]
+// CHECK3-NEXT:    call void @_ZN1SD2Ev(ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[THIS1]]) #[[ATTR4]]
 // CHECK3-NEXT:    ret void
 //
 //
 // CHECK3-LABEL: define {{[^@]+}}@_ZN1SC2El
-// CHECK3-SAME: (ptr nonnull align 8 dereferenceable(24) [[THIS:%.*]], i64 [[A:%.*]]) unnamed_addr #[[ATTR4]] comdat align 2 {
+// CHECK3-SAME: (ptr nonnull align 8 dereferenceable(24) [[THIS:%.*]], i64 [[A:%.*]]) unnamed_addr #[[ATTR3]] comdat align 2 {
 // CHECK3-NEXT:  entry:
 // CHECK3-NEXT:    [[THIS_ADDR:%.*]] = alloca ptr, align 8
 // CHECK3-NEXT:    [[A_ADDR:%.*]] = alloca i64, align 8
@@ -1833,7 +1731,7 @@ int main() {
 //
 //
 // CHECK3-LABEL: define {{[^@]+}}@_ZN1SD2Ev
-// CHECK3-SAME: (ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[THIS:%.*]]) unnamed_addr #[[ATTR4]] comdat align 2 {
+// CHECK3-SAME: (ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[THIS:%.*]]) unnamed_addr #[[ATTR3]] comdat align 2 {
 // CHECK3-NEXT:  entry:
 // CHECK3-NEXT:    [[THIS_ADDR:%.*]] = alloca ptr, align 8
 // CHECK3-NEXT:    store ptr [[THIS]], ptr [[THIS_ADDR]], align 8
@@ -2146,9 +2044,7 @@ int main() {
 // CHECK5-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP9]], 1
 // CHECK5-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK5-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP18]]
-// CHECK5-NEXT:    invoke void @_Z3foov()
-// CHECK5-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP18]]
-// CHECK5:       invoke.cont:
+// CHECK5-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP18]]
 // CHECK5-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK5:       omp.body.continue:
 // CHECK5-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
@@ -2169,19 +2065,6 @@ int main() {
 // CHECK5-NEXT:    br label [[DOTOMP_FINAL_DONE]]
 // CHECK5:       .omp.final.done:
 // CHECK5-NEXT:    ret void
-// CHECK5:       terminate.lpad:
-// CHECK5-NEXT:    [[TMP13:%.*]] = landingpad { ptr, i32 }
-// CHECK5-NEXT:            catch ptr null
-// CHECK5-NEXT:    [[TMP14:%.*]] = extractvalue { ptr, i32 } [[TMP13]], 0
-// CHECK5-NEXT:    call void @__clang_call_terminate(ptr [[TMP14]]) #[[ATTR12:[0-9]+]], !llvm.access.group [[ACC_GRP18]]
-// CHECK5-NEXT:    unreachable
-//
-//
-// CHECK5-LABEL: define {{[^@]+}}@__clang_call_terminate
-// CHECK5-SAME: (ptr [[TMP0:%.*]]) #[[ATTR7:[0-9]+]] comdat {
-// CHECK5-NEXT:    [[TMP2:%.*]] = call ptr @__cxa_begin_catch(ptr [[TMP0]]) #[[ATTR4]]
-// CHECK5-NEXT:    call void @_ZSt9terminatev() #[[ATTR12]]
-// CHECK5-NEXT:    unreachable
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}_main_l74
@@ -2323,9 +2206,7 @@ int main() {
 // CHECK5-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP9]], 1
 // CHECK5-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK5-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP27]]
-// CHECK5-NEXT:    invoke void @_Z3foov()
-// CHECK5-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP27]]
-// CHECK5:       invoke.cont:
+// CHECK5-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP27]]
 // CHECK5-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK5:       omp.body.continue:
 // CHECK5-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
@@ -2346,16 +2227,10 @@ int main() {
 // CHECK5-NEXT:    br label [[DOTOMP_FINAL_DONE]]
 // CHECK5:       .omp.final.done:
 // CHECK5-NEXT:    ret void
-// CHECK5:       terminate.lpad:
-// CHECK5-NEXT:    [[TMP13:%.*]] = landingpad { ptr, i32 }
-// CHECK5-NEXT:            catch ptr null
-// CHECK5-NEXT:    [[TMP14:%.*]] = extractvalue { ptr, i32 } [[TMP13]], 0
-// CHECK5-NEXT:    call void @__clang_call_terminate(ptr [[TMP14]]) #[[ATTR12]], !llvm.access.group [[ACC_GRP27]]
-// CHECK5-NEXT:    unreachable
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@_Z5tmainIcLi5EEiv
-// CHECK5-SAME: () #[[ATTR8:[0-9]+]] comdat {
+// CHECK5-SAME: () #[[ATTR7:[0-9]+]] comdat {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[DOTOFFLOAD_BASEPTRS:%.*]] = alloca [1 x ptr], align 8
 // CHECK5-NEXT:    [[DOTOFFLOAD_PTRS:%.*]] = alloca [1 x ptr], align 8
@@ -2453,7 +2328,7 @@ int main() {
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@_Z5tmainI1SLi1EEiv
-// CHECK5-SAME: () #[[ATTR8]] comdat {
+// CHECK5-SAME: () #[[ATTR7]] comdat {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[DOTOFFLOAD_BASEPTRS:%.*]] = alloca [1 x ptr], align 8
 // CHECK5-NEXT:    [[DOTOFFLOAD_PTRS:%.*]] = alloca [1 x ptr], align 8
@@ -2551,7 +2426,7 @@ int main() {
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@_ZN1SD1Ev
-// CHECK5-SAME: (ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[THIS:%.*]]) unnamed_addr #[[ATTR8]] comdat align 2 {
+// CHECK5-SAME: (ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[THIS:%.*]]) unnamed_addr #[[ATTR7]] comdat align 2 {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[THIS_ADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    store ptr [[THIS]], ptr [[THIS_ADDR]], align 8
@@ -2561,7 +2436,7 @@ int main() {
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@_ZN1SC2El
-// CHECK5-SAME: (ptr nonnull align 8 dereferenceable(24) [[THIS:%.*]], i64 [[A:%.*]]) unnamed_addr #[[ATTR8]] comdat align 2 {
+// CHECK5-SAME: (ptr nonnull align 8 dereferenceable(24) [[THIS:%.*]], i64 [[A:%.*]]) unnamed_addr #[[ATTR7]] comdat align 2 {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[THIS_ADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    [[A_ADDR:%.*]] = alloca i64, align 8
@@ -2575,7 +2450,7 @@ int main() {
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__Z5tmainIcLi5EEiv_l52
-// CHECK5-SAME: (ptr noalias [[DYN_PTR:%.*]]) #[[ATTR9:[0-9]+]] {
+// CHECK5-SAME: (ptr noalias [[DYN_PTR:%.*]]) #[[ATTR8:[0-9]+]] {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[DYN_PTR_ADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    store ptr [[DYN_PTR]], ptr [[DYN_PTR_ADDR]], align 8
@@ -2706,9 +2581,7 @@ int main() {
 // CHECK5-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP9]], 1
 // CHECK5-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK5-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP33]]
-// CHECK5-NEXT:    invoke void @_Z3foov()
-// CHECK5-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP33]]
-// CHECK5:       invoke.cont:
+// CHECK5-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP33]]
 // CHECK5-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK5:       omp.body.continue:
 // CHECK5-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
@@ -2729,16 +2602,10 @@ int main() {
 // CHECK5-NEXT:    br label [[DOTOMP_FINAL_DONE]]
 // CHECK5:       .omp.final.done:
 // CHECK5-NEXT:    ret void
-// CHECK5:       terminate.lpad:
-// CHECK5-NEXT:    [[TMP13:%.*]] = landingpad { ptr, i32 }
-// CHECK5-NEXT:            catch ptr null
-// CHECK5-NEXT:    [[TMP14:%.*]] = extractvalue { ptr, i32 } [[TMP13]], 0
-// CHECK5-NEXT:    call void @__clang_call_terminate(ptr [[TMP14]]) #[[ATTR12]], !llvm.access.group [[ACC_GRP33]]
-// CHECK5-NEXT:    unreachable
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__Z5tmainIcLi5EEiv_l57
-// CHECK5-SAME: (ptr noalias [[DYN_PTR:%.*]]) #[[ATTR10:[0-9]+]] {
+// CHECK5-SAME: (ptr noalias [[DYN_PTR:%.*]]) #[[ATTR9:[0-9]+]] {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[DYN_PTR_ADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    store ptr [[DYN_PTR]], ptr [[DYN_PTR_ADDR]], align 8
@@ -2869,9 +2736,7 @@ int main() {
 // CHECK5-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP9]], 1
 // CHECK5-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK5-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP39]]
-// CHECK5-NEXT:    invoke void @_Z3foov()
-// CHECK5-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP39]]
-// CHECK5:       invoke.cont:
+// CHECK5-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP39]]
 // CHECK5-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK5:       omp.body.continue:
 // CHECK5-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
@@ -2892,16 +2757,10 @@ int main() {
 // CHECK5-NEXT:    br label [[DOTOMP_FINAL_DONE]]
 // CHECK5:       .omp.final.done:
 // CHECK5-NEXT:    ret void
-// CHECK5:       terminate.lpad:
-// CHECK5-NEXT:    [[TMP13:%.*]] = landingpad { ptr, i32 }
-// CHECK5-NEXT:            catch ptr null
-// CHECK5-NEXT:    [[TMP14:%.*]] = extractvalue { ptr, i32 } [[TMP13]], 0
-// CHECK5-NEXT:    call void @__clang_call_terminate(ptr [[TMP14]]) #[[ATTR12]], !llvm.access.group [[ACC_GRP39]]
-// CHECK5-NEXT:    unreachable
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__Z5tmainI1SLi1EEiv_l52
-// CHECK5-SAME: (ptr noalias [[DYN_PTR:%.*]]) #[[ATTR11:[0-9]+]] {
+// CHECK5-SAME: (ptr noalias [[DYN_PTR:%.*]]) #[[ATTR10:[0-9]+]] {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[DYN_PTR_ADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    store ptr [[DYN_PTR]], ptr [[DYN_PTR_ADDR]], align 8
@@ -3032,9 +2891,7 @@ int main() {
 // CHECK5-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP9]], 1
 // CHECK5-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK5-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP45]]
-// CHECK5-NEXT:    invoke void @_Z3foov()
-// CHECK5-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP45]]
-// CHECK5:       invoke.cont:
+// CHECK5-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP45]]
 // CHECK5-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK5:       omp.body.continue:
 // CHECK5-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
@@ -3055,12 +2912,6 @@ int main() {
 // CHECK5-NEXT:    br label [[DOTOMP_FINAL_DONE]]
 // CHECK5:       .omp.final.done:
 // CHECK5-NEXT:    ret void
-// CHECK5:       terminate.lpad:
-// CHECK5-NEXT:    [[TMP13:%.*]] = landingpad { ptr, i32 }
-// CHECK5-NEXT:            catch ptr null
-// CHECK5-NEXT:    [[TMP14:%.*]] = extractvalue { ptr, i32 } [[TMP13]], 0
-// CHECK5-NEXT:    call void @__clang_call_terminate(ptr [[TMP14]]) #[[ATTR12]], !llvm.access.group [[ACC_GRP45]]
-// CHECK5-NEXT:    unreachable
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__Z5tmainI1SLi1EEiv_l57
@@ -3114,12 +2965,8 @@ int main() {
 // CHECK5-NEXT:    [[CMP1:%.*]] = icmp sle i32 [[TMP5]], [[TMP6]]
 // CHECK5-NEXT:    br i1 [[CMP1]], label [[OMP_INNER_FOR_BODY:%.*]], label [[OMP_INNER_FOR_END:%.*]]
 // CHECK5:       omp.inner.for.body:
-// CHECK5-NEXT:    invoke void @_ZN1SC1El(ptr nonnull align 8 dereferenceable(24) [[REF_TMP]], i64 23)
-// CHECK5-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP48]]
-// CHECK5:       invoke.cont:
-// CHECK5-NEXT:    [[CALL:%.*]] = invoke i8 @_ZN1ScvcEv(ptr nonnull align 8 dereferenceable(24) [[REF_TMP]])
-// CHECK5-NEXT:            to label [[INVOKE_CONT2:%.*]] unwind label [[TERMINATE_LPAD]], !llvm.access.group [[ACC_GRP48]]
-// CHECK5:       invoke.cont2:
+// CHECK5-NEXT:    call unwindabort void @_ZN1SC1El(ptr nonnull align 8 dereferenceable(24) [[REF_TMP]], i64 23), !llvm.access.group [[ACC_GRP48]]
+// CHECK5-NEXT:    [[CALL:%.*]] = call unwindabort i8 @_ZN1ScvcEv(ptr nonnull align 8 dereferenceable(24) [[REF_TMP]]), !llvm.access.group [[ACC_GRP48]]
 // CHECK5-NEXT:    [[TMP7:%.*]] = sext i8 [[CALL]] to i32
 // CHECK5-NEXT:    call void @__kmpc_push_num_threads(ptr @[[GLOB1]], i32 [[TMP1]], i32 [[TMP7]]), !llvm.access.group [[ACC_GRP48]]
 // CHECK5-NEXT:    call void @_ZN1SD1Ev(ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[REF_TMP]]) #[[ATTR4]], !llvm.access.group [[ACC_GRP48]]
@@ -3147,12 +2994,6 @@ int main() {
 // CHECK5-NEXT:    br label [[DOTOMP_FINAL_DONE]]
 // CHECK5:       .omp.final.done:
 // CHECK5-NEXT:    ret void
-// CHECK5:       terminate.lpad:
-// CHECK5-NEXT:    [[TMP16:%.*]] = landingpad { ptr, i32 }
-// CHECK5-NEXT:            catch ptr null
-// CHECK5-NEXT:    [[TMP17:%.*]] = extractvalue { ptr, i32 } [[TMP16]], 0
-// CHECK5-NEXT:    call void @__clang_call_terminate(ptr [[TMP17]]) #[[ATTR12]], !llvm.access.group [[ACC_GRP48]]
-// CHECK5-NEXT:    unreachable
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__Z5tmainI1SLi1EEiv_l57.omp_outlined.omp_outlined
@@ -3210,9 +3051,7 @@ int main() {
 // CHECK5-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP9]], 1
 // CHECK5-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK5-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP51]]
-// CHECK5-NEXT:    invoke void @_Z3foov()
-// CHECK5-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP51]]
-// CHECK5:       invoke.cont:
+// CHECK5-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP51]]
 // CHECK5-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK5:       omp.body.continue:
 // CHECK5-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
@@ -3233,16 +3072,10 @@ int main() {
 // CHECK5-NEXT:    br label [[DOTOMP_FINAL_DONE]]
 // CHECK5:       .omp.final.done:
 // CHECK5-NEXT:    ret void
-// CHECK5:       terminate.lpad:
-// CHECK5-NEXT:    [[TMP13:%.*]] = landingpad { ptr, i32 }
-// CHECK5-NEXT:            catch ptr null
-// CHECK5-NEXT:    [[TMP14:%.*]] = extractvalue { ptr, i32 } [[TMP13]], 0
-// CHECK5-NEXT:    call void @__clang_call_terminate(ptr [[TMP14]]) #[[ATTR12]], !llvm.access.group [[ACC_GRP51]]
-// CHECK5-NEXT:    unreachable
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@_ZN1SD2Ev
-// CHECK5-SAME: (ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[THIS:%.*]]) unnamed_addr #[[ATTR8]] comdat align 2 {
+// CHECK5-SAME: (ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[THIS:%.*]]) unnamed_addr #[[ATTR7]] comdat align 2 {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[THIS_ADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    store ptr [[THIS]], ptr [[THIS_ADDR]], align 8
@@ -3555,9 +3388,7 @@ int main() {
 // CHECK9-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP9]], 1
 // CHECK9-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK9-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP21]]
-// CHECK9-NEXT:    invoke void @_Z3foov()
-// CHECK9-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP21]]
-// CHECK9:       invoke.cont:
+// CHECK9-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP21]]
 // CHECK9-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK9:       omp.body.continue:
 // CHECK9-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
@@ -3578,19 +3409,6 @@ int main() {
 // CHECK9-NEXT:    br label [[DOTOMP_FINAL_DONE]]
 // CHECK9:       .omp.final.done:
 // CHECK9-NEXT:    ret void
-// CHECK9:       terminate.lpad:
-// CHECK9-NEXT:    [[TMP13:%.*]] = landingpad { ptr, i32 }
-// CHECK9-NEXT:            catch ptr null
-// CHECK9-NEXT:    [[TMP14:%.*]] = extractvalue { ptr, i32 } [[TMP13]], 0
-// CHECK9-NEXT:    call void @__clang_call_terminate(ptr [[TMP14]]) #[[ATTR12:[0-9]+]], !llvm.access.group [[ACC_GRP21]]
-// CHECK9-NEXT:    unreachable
-//
-//
-// CHECK9-LABEL: define {{[^@]+}}@__clang_call_terminate
-// CHECK9-SAME: (ptr [[TMP0:%.*]]) #[[ATTR7:[0-9]+]] comdat {
-// CHECK9-NEXT:    [[TMP2:%.*]] = call ptr @__cxa_begin_catch(ptr [[TMP0]]) #[[ATTR4]]
-// CHECK9-NEXT:    call void @_ZSt9terminatev() #[[ATTR12]]
-// CHECK9-NEXT:    unreachable
 //
 //
 // CHECK9-LABEL: define {{[^@]+}}@{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}_main_l74
@@ -3732,9 +3550,7 @@ int main() {
 // CHECK9-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP9]], 1
 // CHECK9-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK9-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP30]]
-// CHECK9-NEXT:    invoke void @_Z3foov()
-// CHECK9-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP30]]
-// CHECK9:       invoke.cont:
+// CHECK9-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP30]]
 // CHECK9-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK9:       omp.body.continue:
 // CHECK9-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
@@ -3755,16 +3571,10 @@ int main() {
 // CHECK9-NEXT:    br label [[DOTOMP_FINAL_DONE]]
 // CHECK9:       .omp.final.done:
 // CHECK9-NEXT:    ret void
-// CHECK9:       terminate.lpad:
-// CHECK9-NEXT:    [[TMP13:%.*]] = landingpad { ptr, i32 }
-// CHECK9-NEXT:            catch ptr null
-// CHECK9-NEXT:    [[TMP14:%.*]] = extractvalue { ptr, i32 } [[TMP13]], 0
-// CHECK9-NEXT:    call void @__clang_call_terminate(ptr [[TMP14]]) #[[ATTR12]], !llvm.access.group [[ACC_GRP30]]
-// CHECK9-NEXT:    unreachable
 //
 //
 // CHECK9-LABEL: define {{[^@]+}}@_Z5tmainIcLi5EEiv
-// CHECK9-SAME: () #[[ATTR8:[0-9]+]] comdat {
+// CHECK9-SAME: () #[[ATTR7:[0-9]+]] comdat {
 // CHECK9-NEXT:  entry:
 // CHECK9-NEXT:    [[DOTOFFLOAD_BASEPTRS:%.*]] = alloca [1 x ptr], align 8
 // CHECK9-NEXT:    [[DOTOFFLOAD_PTRS:%.*]] = alloca [1 x ptr], align 8
@@ -3862,7 +3672,7 @@ int main() {
 //
 //
 // CHECK9-LABEL: define {{[^@]+}}@_Z5tmainI1SLi1EEiv
-// CHECK9-SAME: () #[[ATTR8]] comdat {
+// CHECK9-SAME: () #[[ATTR7]] comdat {
 // CHECK9-NEXT:  entry:
 // CHECK9-NEXT:    [[DOTOFFLOAD_BASEPTRS:%.*]] = alloca [1 x ptr], align 8
 // CHECK9-NEXT:    [[DOTOFFLOAD_PTRS:%.*]] = alloca [1 x ptr], align 8
@@ -3960,7 +3770,7 @@ int main() {
 //
 //
 // CHECK9-LABEL: define {{[^@]+}}@_ZN1SD1Ev
-// CHECK9-SAME: (ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[THIS:%.*]]) unnamed_addr #[[ATTR8]] comdat {
+// CHECK9-SAME: (ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[THIS:%.*]]) unnamed_addr #[[ATTR7]] comdat {
 // CHECK9-NEXT:  entry:
 // CHECK9-NEXT:    [[THIS_ADDR:%.*]] = alloca ptr, align 8
 // CHECK9-NEXT:    store ptr [[THIS]], ptr [[THIS_ADDR]], align 8
@@ -3970,7 +3780,7 @@ int main() {
 //
 //
 // CHECK9-LABEL: define {{[^@]+}}@_ZN1SC2El
-// CHECK9-SAME: (ptr nonnull align 8 dereferenceable(24) [[THIS:%.*]], i64 [[A:%.*]]) unnamed_addr #[[ATTR8]] comdat {
+// CHECK9-SAME: (ptr nonnull align 8 dereferenceable(24) [[THIS:%.*]], i64 [[A:%.*]]) unnamed_addr #[[ATTR7]] comdat {
 // CHECK9-NEXT:  entry:
 // CHECK9-NEXT:    [[THIS_ADDR:%.*]] = alloca ptr, align 8
 // CHECK9-NEXT:    [[A_ADDR:%.*]] = alloca i64, align 8
@@ -3984,7 +3794,7 @@ int main() {
 //
 //
 // CHECK9-LABEL: define {{[^@]+}}@{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__Z5tmainIcLi5EEiv_l52
-// CHECK9-SAME: (ptr noalias [[DYN_PTR:%.*]]) #[[ATTR9:[0-9]+]] {
+// CHECK9-SAME: (ptr noalias [[DYN_PTR:%.*]]) #[[ATTR8:[0-9]+]] {
 // CHECK9-NEXT:  entry:
 // CHECK9-NEXT:    [[DYN_PTR_ADDR:%.*]] = alloca ptr, align 8
 // CHECK9-NEXT:    store ptr [[DYN_PTR]], ptr [[DYN_PTR_ADDR]], align 8
@@ -4115,9 +3925,7 @@ int main() {
 // CHECK9-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP9]], 1
 // CHECK9-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK9-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP36]]
-// CHECK9-NEXT:    invoke void @_Z3foov()
-// CHECK9-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP36]]
-// CHECK9:       invoke.cont:
+// CHECK9-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP36]]
 // CHECK9-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK9:       omp.body.continue:
 // CHECK9-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
@@ -4138,16 +3946,10 @@ int main() {
 // CHECK9-NEXT:    br label [[DOTOMP_FINAL_DONE]]
 // CHECK9:       .omp.final.done:
 // CHECK9-NEXT:    ret void
-// CHECK9:       terminate.lpad:
-// CHECK9-NEXT:    [[TMP13:%.*]] = landingpad { ptr, i32 }
-// CHECK9-NEXT:            catch ptr null
-// CHECK9-NEXT:    [[TMP14:%.*]] = extractvalue { ptr, i32 } [[TMP13]], 0
-// CHECK9-NEXT:    call void @__clang_call_terminate(ptr [[TMP14]]) #[[ATTR12]], !llvm.access.group [[ACC_GRP36]]
-// CHECK9-NEXT:    unreachable
 //
 //
 // CHECK9-LABEL: define {{[^@]+}}@{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__Z5tmainIcLi5EEiv_l57
-// CHECK9-SAME: (ptr noalias [[DYN_PTR:%.*]]) #[[ATTR10:[0-9]+]] {
+// CHECK9-SAME: (ptr noalias [[DYN_PTR:%.*]]) #[[ATTR9:[0-9]+]] {
 // CHECK9-NEXT:  entry:
 // CHECK9-NEXT:    [[DYN_PTR_ADDR:%.*]] = alloca ptr, align 8
 // CHECK9-NEXT:    store ptr [[DYN_PTR]], ptr [[DYN_PTR_ADDR]], align 8
@@ -4278,9 +4080,7 @@ int main() {
 // CHECK9-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP9]], 1
 // CHECK9-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK9-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP42]]
-// CHECK9-NEXT:    invoke void @_Z3foov()
-// CHECK9-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP42]]
-// CHECK9:       invoke.cont:
+// CHECK9-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP42]]
 // CHECK9-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK9:       omp.body.continue:
 // CHECK9-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
@@ -4301,16 +4101,10 @@ int main() {
 // CHECK9-NEXT:    br label [[DOTOMP_FINAL_DONE]]
 // CHECK9:       .omp.final.done:
 // CHECK9-NEXT:    ret void
-// CHECK9:       terminate.lpad:
-// CHECK9-NEXT:    [[TMP13:%.*]] = landingpad { ptr, i32 }
-// CHECK9-NEXT:            catch ptr null
-// CHECK9-NEXT:    [[TMP14:%.*]] = extractvalue { ptr, i32 } [[TMP13]], 0
-// CHECK9-NEXT:    call void @__clang_call_terminate(ptr [[TMP14]]) #[[ATTR12]], !llvm.access.group [[ACC_GRP42]]
-// CHECK9-NEXT:    unreachable
 //
 //
 // CHECK9-LABEL: define {{[^@]+}}@{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__Z5tmainI1SLi1EEiv_l52
-// CHECK9-SAME: (ptr noalias [[DYN_PTR:%.*]]) #[[ATTR11:[0-9]+]] {
+// CHECK9-SAME: (ptr noalias [[DYN_PTR:%.*]]) #[[ATTR10:[0-9]+]] {
 // CHECK9-NEXT:  entry:
 // CHECK9-NEXT:    [[DYN_PTR_ADDR:%.*]] = alloca ptr, align 8
 // CHECK9-NEXT:    store ptr [[DYN_PTR]], ptr [[DYN_PTR_ADDR]], align 8
@@ -4441,9 +4235,7 @@ int main() {
 // CHECK9-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP9]], 1
 // CHECK9-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK9-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP48]]
-// CHECK9-NEXT:    invoke void @_Z3foov()
-// CHECK9-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP48]]
-// CHECK9:       invoke.cont:
+// CHECK9-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP48]]
 // CHECK9-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK9:       omp.body.continue:
 // CHECK9-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
@@ -4464,12 +4256,6 @@ int main() {
 // CHECK9-NEXT:    br label [[DOTOMP_FINAL_DONE]]
 // CHECK9:       .omp.final.done:
 // CHECK9-NEXT:    ret void
-// CHECK9:       terminate.lpad:
-// CHECK9-NEXT:    [[TMP13:%.*]] = landingpad { ptr, i32 }
-// CHECK9-NEXT:            catch ptr null
-// CHECK9-NEXT:    [[TMP14:%.*]] = extractvalue { ptr, i32 } [[TMP13]], 0
-// CHECK9-NEXT:    call void @__clang_call_terminate(ptr [[TMP14]]) #[[ATTR12]], !llvm.access.group [[ACC_GRP48]]
-// CHECK9-NEXT:    unreachable
 //
 //
 // CHECK9-LABEL: define {{[^@]+}}@{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__Z5tmainI1SLi1EEiv_l57
@@ -4523,12 +4309,8 @@ int main() {
 // CHECK9-NEXT:    [[CMP1:%.*]] = icmp sle i32 [[TMP5]], [[TMP6]]
 // CHECK9-NEXT:    br i1 [[CMP1]], label [[OMP_INNER_FOR_BODY:%.*]], label [[OMP_INNER_FOR_END:%.*]]
 // CHECK9:       omp.inner.for.body:
-// CHECK9-NEXT:    invoke void @_ZN1SC1El(ptr nonnull align 8 dereferenceable(24) [[REF_TMP]], i64 23)
-// CHECK9-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP51]]
-// CHECK9:       invoke.cont:
-// CHECK9-NEXT:    [[CALL:%.*]] = invoke i8 @_ZN1ScvcEv(ptr nonnull align 8 dereferenceable(24) [[REF_TMP]])
-// CHECK9-NEXT:            to label [[INVOKE_CONT2:%.*]] unwind label [[TERMINATE_LPAD]], !llvm.access.group [[ACC_GRP51]]
-// CHECK9:       invoke.cont2:
+// CHECK9-NEXT:    call unwindabort void @_ZN1SC1El(ptr nonnull align 8 dereferenceable(24) [[REF_TMP]], i64 23), !llvm.access.group [[ACC_GRP51]]
+// CHECK9-NEXT:    [[CALL:%.*]] = call unwindabort i8 @_ZN1ScvcEv(ptr nonnull align 8 dereferenceable(24) [[REF_TMP]]), !llvm.access.group [[ACC_GRP51]]
 // CHECK9-NEXT:    [[TMP7:%.*]] = sext i8 [[CALL]] to i32
 // CHECK9-NEXT:    call void @__kmpc_push_num_threads(ptr @[[GLOB1]], i32 [[TMP1]], i32 [[TMP7]]), !llvm.access.group [[ACC_GRP51]]
 // CHECK9-NEXT:    call void @_ZN1SD1Ev(ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[REF_TMP]]) #[[ATTR4]], !llvm.access.group [[ACC_GRP51]]
@@ -4556,12 +4338,6 @@ int main() {
 // CHECK9-NEXT:    br label [[DOTOMP_FINAL_DONE]]
 // CHECK9:       .omp.final.done:
 // CHECK9-NEXT:    ret void
-// CHECK9:       terminate.lpad:
-// CHECK9-NEXT:    [[TMP16:%.*]] = landingpad { ptr, i32 }
-// CHECK9-NEXT:            catch ptr null
-// CHECK9-NEXT:    [[TMP17:%.*]] = extractvalue { ptr, i32 } [[TMP16]], 0
-// CHECK9-NEXT:    call void @__clang_call_terminate(ptr [[TMP17]]) #[[ATTR12]], !llvm.access.group [[ACC_GRP51]]
-// CHECK9-NEXT:    unreachable
 //
 //
 // CHECK9-LABEL: define {{[^@]+}}@{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__Z5tmainI1SLi1EEiv_l57.omp_outlined.omp_outlined
@@ -4619,9 +4395,7 @@ int main() {
 // CHECK9-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP9]], 1
 // CHECK9-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK9-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP54]]
-// CHECK9-NEXT:    invoke void @_Z3foov()
-// CHECK9-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP54]]
-// CHECK9:       invoke.cont:
+// CHECK9-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP54]]
 // CHECK9-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK9:       omp.body.continue:
 // CHECK9-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
@@ -4642,16 +4416,10 @@ int main() {
 // CHECK9-NEXT:    br label [[DOTOMP_FINAL_DONE]]
 // CHECK9:       .omp.final.done:
 // CHECK9-NEXT:    ret void
-// CHECK9:       terminate.lpad:
-// CHECK9-NEXT:    [[TMP13:%.*]] = landingpad { ptr, i32 }
-// CHECK9-NEXT:            catch ptr null
-// CHECK9-NEXT:    [[TMP14:%.*]] = extractvalue { ptr, i32 } [[TMP13]], 0
-// CHECK9-NEXT:    call void @__clang_call_terminate(ptr [[TMP14]]) #[[ATTR12]], !llvm.access.group [[ACC_GRP54]]
-// CHECK9-NEXT:    unreachable
 //
 //
 // CHECK9-LABEL: define {{[^@]+}}@_ZN1SD2Ev
-// CHECK9-SAME: (ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[THIS:%.*]]) unnamed_addr #[[ATTR8]] comdat {
+// CHECK9-SAME: (ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[THIS:%.*]]) unnamed_addr #[[ATTR7]] comdat {
 // CHECK9-NEXT:  entry:
 // CHECK9-NEXT:    [[THIS_ADDR:%.*]] = alloca ptr, align 8
 // CHECK9-NEXT:    store ptr [[THIS]], ptr [[THIS_ADDR]], align 8
@@ -4672,11 +4440,11 @@ int main() {
 // CHECK11-NEXT:    [[DOTOMP_UB:%.*]] = alloca i32, align 4
 // CHECK11-NEXT:    [[DOTOMP_IV:%.*]] = alloca i32, align 4
 // CHECK11-NEXT:    [[I:%.*]] = alloca i32, align 4
-// CHECK11-NEXT:    [[_TMP3:%.*]] = alloca i32, align 4
-// CHECK11-NEXT:    [[DOTOMP_LB4:%.*]] = alloca i32, align 4
-// CHECK11-NEXT:    [[DOTOMP_UB5:%.*]] = alloca i32, align 4
-// CHECK11-NEXT:    [[DOTOMP_IV6:%.*]] = alloca i32, align 4
-// CHECK11-NEXT:    [[I7:%.*]] = alloca i32, align 4
+// CHECK11-NEXT:    [[_TMP2:%.*]] = alloca i32, align 4
+// CHECK11-NEXT:    [[DOTOMP_LB3:%.*]] = alloca i32, align 4
+// CHECK11-NEXT:    [[DOTOMP_UB4:%.*]] = alloca i32, align 4
+// CHECK11-NEXT:    [[DOTOMP_IV5:%.*]] = alloca i32, align 4
+// CHECK11-NEXT:    [[I6:%.*]] = alloca i32, align 4
 // CHECK11-NEXT:    store i32 0, ptr [[RETVAL]], align 4
 // CHECK11-NEXT:    call void @_ZN1SC1El(ptr nonnull align 8 dereferenceable(24) [[S]], i64 0)
 // CHECK11-NEXT:    [[CALL:%.*]] = invoke i8 @_ZN1ScvcEv(ptr nonnull align 8 dereferenceable(24) [[S]])
@@ -4698,16 +4466,14 @@ int main() {
 // CHECK11-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP3]], 1
 // CHECK11-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK11-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP4]]
-// CHECK11-NEXT:    invoke void @_Z3foov()
-// CHECK11-NEXT:            to label [[INVOKE_CONT1:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP4]]
-// CHECK11:       invoke.cont1:
+// CHECK11-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP4]]
 // CHECK11-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK11:       omp.body.continue:
 // CHECK11-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
 // CHECK11:       omp.inner.for.inc:
 // CHECK11-NEXT:    [[TMP4:%.*]] = load i32, ptr [[DOTOMP_IV]], align 4, !llvm.access.group [[ACC_GRP4]]
-// CHECK11-NEXT:    [[ADD2:%.*]] = add nsw i32 [[TMP4]], 1
-// CHECK11-NEXT:    store i32 [[ADD2]], ptr [[DOTOMP_IV]], align 4, !llvm.access.group [[ACC_GRP4]]
+// CHECK11-NEXT:    [[ADD1:%.*]] = add nsw i32 [[TMP4]], 1
+// CHECK11-NEXT:    store i32 [[ADD1]], ptr [[DOTOMP_IV]], align 4, !llvm.access.group [[ACC_GRP4]]
 // CHECK11-NEXT:    br label [[OMP_INNER_FOR_COND]], !llvm.loop [[LOOP5:![0-9]+]]
 // CHECK11:       lpad:
 // CHECK11-NEXT:    [[TMP5:%.*]] = landingpad { ptr, i32 }
@@ -4716,64 +4482,56 @@ int main() {
 // CHECK11-NEXT:    store ptr [[TMP6]], ptr [[EXN_SLOT]], align 8
 // CHECK11-NEXT:    [[TMP7:%.*]] = extractvalue { ptr, i32 } [[TMP5]], 1
 // CHECK11-NEXT:    store i32 [[TMP7]], ptr [[EHSELECTOR_SLOT]], align 4
-// CHECK11-NEXT:    call void @_ZN1SD1Ev(ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[S]]) #[[ATTR5:[0-9]+]]
+// CHECK11-NEXT:    call void @_ZN1SD1Ev(ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[S]]) #[[ATTR4:[0-9]+]]
 // CHECK11-NEXT:    br label [[EH_RESUME:%.*]]
 // CHECK11:       omp.inner.for.end:
 // CHECK11-NEXT:    store i32 100, ptr [[I]], align 4
-// CHECK11-NEXT:    store i32 0, ptr [[DOTOMP_LB4]], align 4
-// CHECK11-NEXT:    store i32 99, ptr [[DOTOMP_UB5]], align 4
-// CHECK11-NEXT:    [[TMP8:%.*]] = load i32, ptr [[DOTOMP_LB4]], align 4
-// CHECK11-NEXT:    store i32 [[TMP8]], ptr [[DOTOMP_IV6]], align 4
-// CHECK11-NEXT:    br label [[OMP_INNER_FOR_COND8:%.*]]
-// CHECK11:       omp.inner.for.cond8:
-// CHECK11-NEXT:    [[TMP9:%.*]] = load i32, ptr [[DOTOMP_IV6]], align 4, !llvm.access.group [[ACC_GRP8:![0-9]+]]
-// CHECK11-NEXT:    [[TMP10:%.*]] = load i32, ptr [[DOTOMP_UB5]], align 4, !llvm.access.group [[ACC_GRP8]]
-// CHECK11-NEXT:    [[CMP9:%.*]] = icmp sle i32 [[TMP9]], [[TMP10]]
-// CHECK11-NEXT:    br i1 [[CMP9]], label [[OMP_INNER_FOR_BODY10:%.*]], label [[OMP_INNER_FOR_END17:%.*]]
-// CHECK11:       omp.inner.for.body10:
-// CHECK11-NEXT:    [[TMP11:%.*]] = load i32, ptr [[DOTOMP_IV6]], align 4, !llvm.access.group [[ACC_GRP8]]
-// CHECK11-NEXT:    [[MUL11:%.*]] = mul nsw i32 [[TMP11]], 1
-// CHECK11-NEXT:    [[ADD12:%.*]] = add nsw i32 0, [[MUL11]]
-// CHECK11-NEXT:    store i32 [[ADD12]], ptr [[I7]], align 4, !llvm.access.group [[ACC_GRP8]]
-// CHECK11-NEXT:    invoke void @_Z3foov()
-// CHECK11-NEXT:            to label [[INVOKE_CONT13:%.*]] unwind label [[TERMINATE_LPAD]], !llvm.access.group [[ACC_GRP8]]
-// CHECK11:       invoke.cont13:
-// CHECK11-NEXT:    br label [[OMP_BODY_CONTINUE14:%.*]]
-// CHECK11:       omp.body.continue14:
-// CHECK11-NEXT:    br label [[OMP_INNER_FOR_INC15:%.*]]
-// CHECK11:       omp.inner.for.inc15:
-// CHECK11-NEXT:    [[TMP12:%.*]] = load i32, ptr [[DOTOMP_IV6]], align 4, !llvm.access.group [[ACC_GRP8]]
-// CHECK11-NEXT:    [[ADD16:%.*]] = add nsw i32 [[TMP12]], 1
-// CHECK11-NEXT:    store i32 [[ADD16]], ptr [[DOTOMP_IV6]], align 4, !llvm.access.group [[ACC_GRP8]]
-// CHECK11-NEXT:    br label [[OMP_INNER_FOR_COND8]], !llvm.loop [[LOOP9:![0-9]+]]
-// CHECK11:       omp.inner.for.end17:
-// CHECK11-NEXT:    store i32 100, ptr [[I7]], align 4
+// CHECK11-NEXT:    store i32 0, ptr [[DOTOMP_LB3]], align 4
+// CHECK11-NEXT:    store i32 99, ptr [[DOTOMP_UB4]], align 4
+// CHECK11-NEXT:    [[TMP8:%.*]] = load i32, ptr [[DOTOMP_LB3]], align 4
+// CHECK11-NEXT:    store i32 [[TMP8]], ptr [[DOTOMP_IV5]], align 4
+// CHECK11-NEXT:    br label [[OMP_INNER_FOR_COND7:%.*]]
+// CHECK11:       omp.inner.for.cond7:
+// CHECK11-NEXT:    [[TMP9:%.*]] = load i32, ptr [[DOTOMP_IV5]], align 4, !llvm.access.group [[ACC_GRP8:![0-9]+]]
+// CHECK11-NEXT:    [[TMP10:%.*]] = load i32, ptr [[DOTOMP_UB4]], align 4, !llvm.access.group [[ACC_GRP8]]
+// CHECK11-NEXT:    [[CMP8:%.*]] = icmp sle i32 [[TMP9]], [[TMP10]]
+// CHECK11-NEXT:    br i1 [[CMP8]], label [[OMP_INNER_FOR_BODY9:%.*]], label [[OMP_INNER_FOR_END15:%.*]]
+// CHECK11:       omp.inner.for.body9:
+// CHECK11-NEXT:    [[TMP11:%.*]] = load i32, ptr [[DOTOMP_IV5]], align 4, !llvm.access.group [[ACC_GRP8]]
+// CHECK11-NEXT:    [[MUL10:%.*]] = mul nsw i32 [[TMP11]], 1
+// CHECK11-NEXT:    [[ADD11:%.*]] = add nsw i32 0, [[MUL10]]
+// CHECK11-NEXT:    store i32 [[ADD11]], ptr [[I6]], align 4, !llvm.access.group [[ACC_GRP8]]
+// CHECK11-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP8]]
+// CHECK11-NEXT:    br label [[OMP_BODY_CONTINUE12:%.*]]
+// CHECK11:       omp.body.continue12:
+// CHECK11-NEXT:    br label [[OMP_INNER_FOR_INC13:%.*]]
+// CHECK11:       omp.inner.for.inc13:
+// CHECK11-NEXT:    [[TMP12:%.*]] = load i32, ptr [[DOTOMP_IV5]], align 4, !llvm.access.group [[ACC_GRP8]]
+// CHECK11-NEXT:    [[ADD14:%.*]] = add nsw i32 [[TMP12]], 1
+// CHECK11-NEXT:    store i32 [[ADD14]], ptr [[DOTOMP_IV5]], align 4, !llvm.access.group [[ACC_GRP8]]
+// CHECK11-NEXT:    br label [[OMP_INNER_FOR_COND7]], !llvm.loop [[LOOP9:![0-9]+]]
+// CHECK11:       omp.inner.for.end15:
+// CHECK11-NEXT:    store i32 100, ptr [[I6]], align 4
 // CHECK11-NEXT:    [[TMP13:%.*]] = load i8, ptr [[A]], align 1
 // CHECK11-NEXT:    [[CONV:%.*]] = sext i8 [[TMP13]] to i32
-// CHECK11-NEXT:    [[CALL19:%.*]] = invoke i32 @_Z5tmainIcLi5EEiv()
-// CHECK11-NEXT:            to label [[INVOKE_CONT18:%.*]] unwind label [[LPAD]]
-// CHECK11:       invoke.cont18:
-// CHECK11-NEXT:    [[ADD20:%.*]] = add nsw i32 [[CONV]], [[CALL19]]
-// CHECK11-NEXT:    [[CALL22:%.*]] = invoke i32 @_Z5tmainI1SLi1EEiv()
-// CHECK11-NEXT:            to label [[INVOKE_CONT21:%.*]] unwind label [[LPAD]]
-// CHECK11:       invoke.cont21:
-// CHECK11-NEXT:    [[ADD23:%.*]] = add nsw i32 [[ADD20]], [[CALL22]]
-// CHECK11-NEXT:    store i32 [[ADD23]], ptr [[RETVAL]], align 4
-// CHECK11-NEXT:    call void @_ZN1SD1Ev(ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[S]]) #[[ATTR5]]
+// CHECK11-NEXT:    [[CALL17:%.*]] = invoke i32 @_Z5tmainIcLi5EEiv()
+// CHECK11-NEXT:            to label [[INVOKE_CONT16:%.*]] unwind label [[LPAD]]
+// CHECK11:       invoke.cont16:
+// CHECK11-NEXT:    [[ADD18:%.*]] = add nsw i32 [[CONV]], [[CALL17]]
+// CHECK11-NEXT:    [[CALL20:%.*]] = invoke i32 @_Z5tmainI1SLi1EEiv()
+// CHECK11-NEXT:            to label [[INVOKE_CONT19:%.*]] unwind label [[LPAD]]
+// CHECK11:       invoke.cont19:
+// CHECK11-NEXT:    [[ADD21:%.*]] = add nsw i32 [[ADD18]], [[CALL20]]
+// CHECK11-NEXT:    store i32 [[ADD21]], ptr [[RETVAL]], align 4
+// CHECK11-NEXT:    call void @_ZN1SD1Ev(ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[S]]) #[[ATTR4]]
 // CHECK11-NEXT:    [[TMP14:%.*]] = load i32, ptr [[RETVAL]], align 4
 // CHECK11-NEXT:    ret i32 [[TMP14]]
 // CHECK11:       eh.resume:
 // CHECK11-NEXT:    [[EXN:%.*]] = load ptr, ptr [[EXN_SLOT]], align 8
 // CHECK11-NEXT:    [[SEL:%.*]] = load i32, ptr [[EHSELECTOR_SLOT]], align 4
 // CHECK11-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } poison, ptr [[EXN]], 0
-// CHECK11-NEXT:    [[LPAD_VAL24:%.*]] = insertvalue { ptr, i32 } [[LPAD_VAL]], i32 [[SEL]], 1
-// CHECK11-NEXT:    resume { ptr, i32 } [[LPAD_VAL24]]
-// CHECK11:       terminate.lpad:
-// CHECK11-NEXT:    [[TMP15:%.*]] = landingpad { ptr, i32 }
-// CHECK11-NEXT:            catch ptr null
-// CHECK11-NEXT:    [[TMP16:%.*]] = extractvalue { ptr, i32 } [[TMP15]], 0
-// CHECK11-NEXT:    call void @__clang_call_terminate(ptr [[TMP16]]) #[[ATTR6:[0-9]+]], !llvm.access.group [[ACC_GRP4]]
-// CHECK11-NEXT:    unreachable
+// CHECK11-NEXT:    [[LPAD_VAL22:%.*]] = insertvalue { ptr, i32 } [[LPAD_VAL]], i32 [[SEL]], 1
+// CHECK11-NEXT:    resume { ptr, i32 } [[LPAD_VAL22]]
 //
 //
 // CHECK11-LABEL: define {{[^@]+}}@_ZN1SC1El
@@ -4802,15 +4560,8 @@ int main() {
 // CHECK11-NEXT:    ret i8 [[CONV]]
 //
 //
-// CHECK11-LABEL: define {{[^@]+}}@__clang_call_terminate
-// CHECK11-SAME: (ptr [[TMP0:%.*]]) #[[ATTR3:[0-9]+]] comdat {
-// CHECK11-NEXT:    [[TMP2:%.*]] = call ptr @__cxa_begin_catch(ptr [[TMP0]]) #[[ATTR5]]
-// CHECK11-NEXT:    call void @_ZSt9terminatev() #[[ATTR6]]
-// CHECK11-NEXT:    unreachable
-//
-//
 // CHECK11-LABEL: define {{[^@]+}}@_Z5tmainIcLi5EEiv
-// CHECK11-SAME: () #[[ATTR4:[0-9]+]] comdat personality ptr @__gxx_personality_v0 {
+// CHECK11-SAME: () #[[ATTR1]] comdat personality ptr @__gxx_personality_v0 {
 // CHECK11-NEXT:  entry:
 // CHECK11-NEXT:    [[TMP:%.*]] = alloca i32, align 4
 // CHECK11-NEXT:    [[DOTOMP_LB:%.*]] = alloca i32, align 4
@@ -4837,9 +4588,7 @@ int main() {
 // CHECK11-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP3]], 1
 // CHECK11-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK11-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP11]]
-// CHECK11-NEXT:    invoke void @_Z3foov()
-// CHECK11-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP11]]
-// CHECK11:       invoke.cont:
+// CHECK11-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP11]]
 // CHECK11-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK11:       omp.body.continue:
 // CHECK11-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
@@ -4859,36 +4608,28 @@ int main() {
 // CHECK11-NEXT:    [[TMP6:%.*]] = load i32, ptr [[DOTOMP_IV5]], align 4, !llvm.access.group [[ACC_GRP14:![0-9]+]]
 // CHECK11-NEXT:    [[TMP7:%.*]] = load i32, ptr [[DOTOMP_UB4]], align 4, !llvm.access.group [[ACC_GRP14]]
 // CHECK11-NEXT:    [[CMP8:%.*]] = icmp sle i32 [[TMP6]], [[TMP7]]
-// CHECK11-NEXT:    br i1 [[CMP8]], label [[OMP_INNER_FOR_BODY9:%.*]], label [[OMP_INNER_FOR_END16:%.*]]
+// CHECK11-NEXT:    br i1 [[CMP8]], label [[OMP_INNER_FOR_BODY9:%.*]], label [[OMP_INNER_FOR_END15:%.*]]
 // CHECK11:       omp.inner.for.body9:
 // CHECK11-NEXT:    [[TMP8:%.*]] = load i32, ptr [[DOTOMP_IV5]], align 4, !llvm.access.group [[ACC_GRP14]]
 // CHECK11-NEXT:    [[MUL10:%.*]] = mul nsw i32 [[TMP8]], 1
 // CHECK11-NEXT:    [[ADD11:%.*]] = add nsw i32 0, [[MUL10]]
 // CHECK11-NEXT:    store i32 [[ADD11]], ptr [[I6]], align 4, !llvm.access.group [[ACC_GRP14]]
-// CHECK11-NEXT:    invoke void @_Z3foov()
-// CHECK11-NEXT:            to label [[INVOKE_CONT12:%.*]] unwind label [[TERMINATE_LPAD]], !llvm.access.group [[ACC_GRP14]]
-// CHECK11:       invoke.cont12:
-// CHECK11-NEXT:    br label [[OMP_BODY_CONTINUE13:%.*]]
-// CHECK11:       omp.body.continue13:
-// CHECK11-NEXT:    br label [[OMP_INNER_FOR_INC14:%.*]]
-// CHECK11:       omp.inner.for.inc14:
+// CHECK11-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP14]]
+// CHECK11-NEXT:    br label [[OMP_BODY_CONTINUE12:%.*]]
+// CHECK11:       omp.body.continue12:
+// CHECK11-NEXT:    br label [[OMP_INNER_FOR_INC13:%.*]]
+// CHECK11:       omp.inner.for.inc13:
 // CHECK11-NEXT:    [[TMP9:%.*]] = load i32, ptr [[DOTOMP_IV5]], align 4, !llvm.access.group [[ACC_GRP14]]
-// CHECK11-NEXT:    [[ADD15:%.*]] = add nsw i32 [[TMP9]], 1
-// CHECK11-NEXT:    store i32 [[ADD15]], ptr [[DOTOMP_IV5]], align 4, !llvm.access.group [[ACC_GRP14]]
+// CHECK11-NEXT:    [[ADD14:%.*]] = add nsw i32 [[TMP9]], 1
+// CHECK11-NEXT:    store i32 [[ADD14]], ptr [[DOTOMP_IV5]], align 4, !llvm.access.group [[ACC_GRP14]]
 // CHECK11-NEXT:    br label [[OMP_INNER_FOR_COND7]], !llvm.loop [[LOOP15:![0-9]+]]
-// CHECK11:       omp.inner.for.end16:
+// CHECK11:       omp.inner.for.end15:
 // CHECK11-NEXT:    store i32 100, ptr [[I6]], align 4
 // CHECK11-NEXT:    ret i32 0
-// CHECK11:       terminate.lpad:
-// CHECK11-NEXT:    [[TMP10:%.*]] = landingpad { ptr, i32 }
-// CHECK11-NEXT:            catch ptr null
-// CHECK11-NEXT:    [[TMP11:%.*]] = extractvalue { ptr, i32 } [[TMP10]], 0
-// CHECK11-NEXT:    call void @__clang_call_terminate(ptr [[TMP11]]) #[[ATTR6]], !llvm.access.group [[ACC_GRP11]]
-// CHECK11-NEXT:    unreachable
 //
 //
 // CHECK11-LABEL: define {{[^@]+}}@_Z5tmainI1SLi1EEiv
-// CHECK11-SAME: () #[[ATTR4]] comdat personality ptr @__gxx_personality_v0 {
+// CHECK11-SAME: () #[[ATTR1]] comdat personality ptr @__gxx_personality_v0 {
 // CHECK11-NEXT:  entry:
 // CHECK11-NEXT:    [[TMP:%.*]] = alloca i32, align 4
 // CHECK11-NEXT:    [[DOTOMP_LB:%.*]] = alloca i32, align 4
@@ -4915,9 +4656,7 @@ int main() {
 // CHECK11-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP3]], 1
 // CHECK11-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK11-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP17]]
-// CHECK11-NEXT:    invoke void @_Z3foov()
-// CHECK11-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP17]]
-// CHECK11:       invoke.cont:
+// CHECK11-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP17]]
 // CHECK11-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK11:       omp.body.continue:
 // CHECK11-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
@@ -4937,46 +4676,38 @@ int main() {
 // CHECK11-NEXT:    [[TMP6:%.*]] = load i32, ptr [[DOTOMP_IV5]], align 4, !llvm.access.group [[ACC_GRP20:![0-9]+]]
 // CHECK11-NEXT:    [[TMP7:%.*]] = load i32, ptr [[DOTOMP_UB4]], align 4, !llvm.access.group [[ACC_GRP20]]
 // CHECK11-NEXT:    [[CMP8:%.*]] = icmp sle i32 [[TMP6]], [[TMP7]]
-// CHECK11-NEXT:    br i1 [[CMP8]], label [[OMP_INNER_FOR_BODY9:%.*]], label [[OMP_INNER_FOR_END16:%.*]]
+// CHECK11-NEXT:    br i1 [[CMP8]], label [[OMP_INNER_FOR_BODY9:%.*]], label [[OMP_INNER_FOR_END15:%.*]]
 // CHECK11:       omp.inner.for.body9:
 // CHECK11-NEXT:    [[TMP8:%.*]] = load i32, ptr [[DOTOMP_IV5]], align 4, !llvm.access.group [[ACC_GRP20]]
 // CHECK11-NEXT:    [[MUL10:%.*]] = mul nsw i32 [[TMP8]], 1
 // CHECK11-NEXT:    [[ADD11:%.*]] = add nsw i32 0, [[MUL10]]
 // CHECK11-NEXT:    store i32 [[ADD11]], ptr [[I6]], align 4, !llvm.access.group [[ACC_GRP20]]
-// CHECK11-NEXT:    invoke void @_Z3foov()
-// CHECK11-NEXT:            to label [[INVOKE_CONT12:%.*]] unwind label [[TERMINATE_LPAD]], !llvm.access.group [[ACC_GRP20]]
-// CHECK11:       invoke.cont12:
-// CHECK11-NEXT:    br label [[OMP_BODY_CONTINUE13:%.*]]
-// CHECK11:       omp.body.continue13:
-// CHECK11-NEXT:    br label [[OMP_INNER_FOR_INC14:%.*]]
-// CHECK11:       omp.inner.for.inc14:
+// CHECK11-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP20]]
+// CHECK11-NEXT:    br label [[OMP_BODY_CONTINUE12:%.*]]
+// CHECK11:       omp.body.continue12:
+// CHECK11-NEXT:    br label [[OMP_INNER_FOR_INC13:%.*]]
+// CHECK11:       omp.inner.for.inc13:
 // CHECK11-NEXT:    [[TMP9:%.*]] = load i32, ptr [[DOTOMP_IV5]], align 4, !llvm.access.group [[ACC_GRP20]]
-// CHECK11-NEXT:    [[ADD15:%.*]] = add nsw i32 [[TMP9]], 1
-// CHECK11-NEXT:    store i32 [[ADD15]], ptr [[DOTOMP_IV5]], align 4, !llvm.access.group [[ACC_GRP20]]
+// CHECK11-NEXT:    [[ADD14:%.*]] = add nsw i32 [[TMP9]], 1
+// CHECK11-NEXT:    store i32 [[ADD14]], ptr [[DOTOMP_IV5]], align 4, !llvm.access.group [[ACC_GRP20]]
 // CHECK11-NEXT:    br label [[OMP_INNER_FOR_COND7]], !llvm.loop [[LOOP21:![0-9]+]]
-// CHECK11:       omp.inner.for.end16:
+// CHECK11:       omp.inner.for.end15:
 // CHECK11-NEXT:    store i32 100, ptr [[I6]], align 4
 // CHECK11-NEXT:    ret i32 0
-// CHECK11:       terminate.lpad:
-// CHECK11-NEXT:    [[TMP10:%.*]] = landingpad { ptr, i32 }
-// CHECK11-NEXT:            catch ptr null
-// CHECK11-NEXT:    [[TMP11:%.*]] = extractvalue { ptr, i32 } [[TMP10]], 0
-// CHECK11-NEXT:    call void @__clang_call_terminate(ptr [[TMP11]]) #[[ATTR6]], !llvm.access.group [[ACC_GRP17]]
-// CHECK11-NEXT:    unreachable
 //
 //
 // CHECK11-LABEL: define {{[^@]+}}@_ZN1SD1Ev
-// CHECK11-SAME: (ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[THIS:%.*]]) unnamed_addr #[[ATTR4]] comdat {
+// CHECK11-SAME: (ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[THIS:%.*]]) unnamed_addr #[[ATTR3:[0-9]+]] comdat {
 // CHECK11-NEXT:  entry:
 // CHECK11-NEXT:    [[THIS_ADDR:%.*]] = alloca ptr, align 8
 // CHECK11-NEXT:    store ptr [[THIS]], ptr [[THIS_ADDR]], align 8
 // CHECK11-NEXT:    [[THIS1:%.*]] = load ptr, ptr [[THIS_ADDR]], align 8
-// CHECK11-NEXT:    call void @_ZN1SD2Ev(ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[THIS1]]) #[[ATTR5]]
+// CHECK11-NEXT:    call void @_ZN1SD2Ev(ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[THIS1]]) #[[ATTR4]]
 // CHECK11-NEXT:    ret void
 //
 //
 // CHECK11-LABEL: define {{[^@]+}}@_ZN1SC2El
-// CHECK11-SAME: (ptr nonnull align 8 dereferenceable(24) [[THIS:%.*]], i64 [[A:%.*]]) unnamed_addr #[[ATTR4]] comdat {
+// CHECK11-SAME: (ptr nonnull align 8 dereferenceable(24) [[THIS:%.*]], i64 [[A:%.*]]) unnamed_addr #[[ATTR3]] comdat {
 // CHECK11-NEXT:  entry:
 // CHECK11-NEXT:    [[THIS_ADDR:%.*]] = alloca ptr, align 8
 // CHECK11-NEXT:    [[A_ADDR:%.*]] = alloca i64, align 8
@@ -4990,7 +4721,7 @@ int main() {
 //
 //
 // CHECK11-LABEL: define {{[^@]+}}@_ZN1SD2Ev
-// CHECK11-SAME: (ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[THIS:%.*]]) unnamed_addr #[[ATTR4]] comdat {
+// CHECK11-SAME: (ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[THIS:%.*]]) unnamed_addr #[[ATTR3]] comdat {
 // CHECK11-NEXT:  entry:
 // CHECK11-NEXT:    [[THIS_ADDR:%.*]] = alloca ptr, align 8
 // CHECK11-NEXT:    store ptr [[THIS]], ptr [[THIS_ADDR]], align 8
@@ -5303,9 +5034,7 @@ int main() {
 // CHECK13-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP9]], 1
 // CHECK13-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK13-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP21]]
-// CHECK13-NEXT:    invoke void @_Z3foov()
-// CHECK13-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP21]]
-// CHECK13:       invoke.cont:
+// CHECK13-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP21]]
 // CHECK13-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK13:       omp.body.continue:
 // CHECK13-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
@@ -5326,19 +5055,6 @@ int main() {
 // CHECK13-NEXT:    br label [[DOTOMP_FINAL_DONE]]
 // CHECK13:       .omp.final.done:
 // CHECK13-NEXT:    ret void
-// CHECK13:       terminate.lpad:
-// CHECK13-NEXT:    [[TMP13:%.*]] = landingpad { ptr, i32 }
-// CHECK13-NEXT:            catch ptr null
-// CHECK13-NEXT:    [[TMP14:%.*]] = extractvalue { ptr, i32 } [[TMP13]], 0
-// CHECK13-NEXT:    call void @__clang_call_terminate(ptr [[TMP14]]) #[[ATTR12:[0-9]+]], !llvm.access.group [[ACC_GRP21]]
-// CHECK13-NEXT:    unreachable
-//
-//
-// CHECK13-LABEL: define {{[^@]+}}@__clang_call_terminate
-// CHECK13-SAME: (ptr [[TMP0:%.*]]) #[[ATTR7:[0-9]+]] comdat {
-// CHECK13-NEXT:    [[TMP2:%.*]] = call ptr @__cxa_begin_catch(ptr [[TMP0]]) #[[ATTR4]]
-// CHECK13-NEXT:    call void @_ZSt9terminatev() #[[ATTR12]]
-// CHECK13-NEXT:    unreachable
 //
 //
 // CHECK13-LABEL: define {{[^@]+}}@{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}_main_l74
@@ -5480,9 +5196,7 @@ int main() {
 // CHECK13-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP9]], 1
 // CHECK13-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK13-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP30]]
-// CHECK13-NEXT:    invoke void @_Z3foov()
-// CHECK13-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP30]]
-// CHECK13:       invoke.cont:
+// CHECK13-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP30]]
 // CHECK13-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK13:       omp.body.continue:
 // CHECK13-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
@@ -5503,16 +5217,10 @@ int main() {
 // CHECK13-NEXT:    br label [[DOTOMP_FINAL_DONE]]
 // CHECK13:       .omp.final.done:
 // CHECK13-NEXT:    ret void
-// CHECK13:       terminate.lpad:
-// CHECK13-NEXT:    [[TMP13:%.*]] = landingpad { ptr, i32 }
-// CHECK13-NEXT:            catch ptr null
-// CHECK13-NEXT:    [[TMP14:%.*]] = extractvalue { ptr, i32 } [[TMP13]], 0
-// CHECK13-NEXT:    call void @__clang_call_terminate(ptr [[TMP14]]) #[[ATTR12]], !llvm.access.group [[ACC_GRP30]]
-// CHECK13-NEXT:    unreachable
 //
 //
 // CHECK13-LABEL: define {{[^@]+}}@_Z5tmainIcLi5EEiv
-// CHECK13-SAME: () #[[ATTR8:[0-9]+]] comdat {
+// CHECK13-SAME: () #[[ATTR7:[0-9]+]] comdat {
 // CHECK13-NEXT:  entry:
 // CHECK13-NEXT:    [[DOTOFFLOAD_BASEPTRS:%.*]] = alloca [1 x ptr], align 8
 // CHECK13-NEXT:    [[DOTOFFLOAD_PTRS:%.*]] = alloca [1 x ptr], align 8
@@ -5610,7 +5318,7 @@ int main() {
 //
 //
 // CHECK13-LABEL: define {{[^@]+}}@_Z5tmainI1SLi1EEiv
-// CHECK13-SAME: () #[[ATTR8]] comdat {
+// CHECK13-SAME: () #[[ATTR7]] comdat {
 // CHECK13-NEXT:  entry:
 // CHECK13-NEXT:    [[DOTOFFLOAD_BASEPTRS:%.*]] = alloca [1 x ptr], align 8
 // CHECK13-NEXT:    [[DOTOFFLOAD_PTRS:%.*]] = alloca [1 x ptr], align 8
@@ -5708,7 +5416,7 @@ int main() {
 //
 //
 // CHECK13-LABEL: define {{[^@]+}}@_ZN1SD1Ev
-// CHECK13-SAME: (ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[THIS:%.*]]) unnamed_addr #[[ATTR8]] comdat {
+// CHECK13-SAME: (ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[THIS:%.*]]) unnamed_addr #[[ATTR7]] comdat {
 // CHECK13-NEXT:  entry:
 // CHECK13-NEXT:    [[THIS_ADDR:%.*]] = alloca ptr, align 8
 // CHECK13-NEXT:    store ptr [[THIS]], ptr [[THIS_ADDR]], align 8
@@ -5718,7 +5426,7 @@ int main() {
 //
 //
 // CHECK13-LABEL: define {{[^@]+}}@_ZN1SC2El
-// CHECK13-SAME: (ptr nonnull align 8 dereferenceable(24) [[THIS:%.*]], i64 [[A:%.*]]) unnamed_addr #[[ATTR8]] comdat {
+// CHECK13-SAME: (ptr nonnull align 8 dereferenceable(24) [[THIS:%.*]], i64 [[A:%.*]]) unnamed_addr #[[ATTR7]] comdat {
 // CHECK13-NEXT:  entry:
 // CHECK13-NEXT:    [[THIS_ADDR:%.*]] = alloca ptr, align 8
 // CHECK13-NEXT:    [[A_ADDR:%.*]] = alloca i64, align 8
@@ -5732,7 +5440,7 @@ int main() {
 //
 //
 // CHECK13-LABEL: define {{[^@]+}}@{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__Z5tmainIcLi5EEiv_l52
-// CHECK13-SAME: (ptr noalias [[DYN_PTR:%.*]]) #[[ATTR9:[0-9]+]] {
+// CHECK13-SAME: (ptr noalias [[DYN_PTR:%.*]]) #[[ATTR8:[0-9]+]] {
 // CHECK13-NEXT:  entry:
 // CHECK13-NEXT:    [[DYN_PTR_ADDR:%.*]] = alloca ptr, align 8
 // CHECK13-NEXT:    store ptr [[DYN_PTR]], ptr [[DYN_PTR_ADDR]], align 8
@@ -5863,9 +5571,7 @@ int main() {
 // CHECK13-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP9]], 1
 // CHECK13-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK13-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP36]]
-// CHECK13-NEXT:    invoke void @_Z3foov()
-// CHECK13-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP36]]
-// CHECK13:       invoke.cont:
+// CHECK13-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP36]]
 // CHECK13-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK13:       omp.body.continue:
 // CHECK13-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
@@ -5886,16 +5592,10 @@ int main() {
 // CHECK13-NEXT:    br label [[DOTOMP_FINAL_DONE]]
 // CHECK13:       .omp.final.done:
 // CHECK13-NEXT:    ret void
-// CHECK13:       terminate.lpad:
-// CHECK13-NEXT:    [[TMP13:%.*]] = landingpad { ptr, i32 }
-// CHECK13-NEXT:            catch ptr null
-// CHECK13-NEXT:    [[TMP14:%.*]] = extractvalue { ptr, i32 } [[TMP13]], 0
-// CHECK13-NEXT:    call void @__clang_call_terminate(ptr [[TMP14]]) #[[ATTR12]], !llvm.access.group [[ACC_GRP36]]
-// CHECK13-NEXT:    unreachable
 //
 //
 // CHECK13-LABEL: define {{[^@]+}}@{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__Z5tmainIcLi5EEiv_l57
-// CHECK13-SAME: (ptr noalias [[DYN_PTR:%.*]]) #[[ATTR10:[0-9]+]] {
+// CHECK13-SAME: (ptr noalias [[DYN_PTR:%.*]]) #[[ATTR9:[0-9]+]] {
 // CHECK13-NEXT:  entry:
 // CHECK13-NEXT:    [[DYN_PTR_ADDR:%.*]] = alloca ptr, align 8
 // CHECK13-NEXT:    store ptr [[DYN_PTR]], ptr [[DYN_PTR_ADDR]], align 8
@@ -6026,9 +5726,7 @@ int main() {
 // CHECK13-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP9]], 1
 // CHECK13-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK13-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP42]]
-// CHECK13-NEXT:    invoke void @_Z3foov()
-// CHECK13-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP42]]
-// CHECK13:       invoke.cont:
+// CHECK13-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP42]]
 // CHECK13-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK13:       omp.body.continue:
 // CHECK13-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
@@ -6049,16 +5747,10 @@ int main() {
 // CHECK13-NEXT:    br label [[DOTOMP_FINAL_DONE]]
 // CHECK13:       .omp.final.done:
 // CHECK13-NEXT:    ret void
-// CHECK13:       terminate.lpad:
-// CHECK13-NEXT:    [[TMP13:%.*]] = landingpad { ptr, i32 }
-// CHECK13-NEXT:            catch ptr null
-// CHECK13-NEXT:    [[TMP14:%.*]] = extractvalue { ptr, i32 } [[TMP13]], 0
-// CHECK13-NEXT:    call void @__clang_call_terminate(ptr [[TMP14]]) #[[ATTR12]], !llvm.access.group [[ACC_GRP42]]
-// CHECK13-NEXT:    unreachable
 //
 //
 // CHECK13-LABEL: define {{[^@]+}}@{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__Z5tmainI1SLi1EEiv_l52
-// CHECK13-SAME: (ptr noalias [[DYN_PTR:%.*]]) #[[ATTR11:[0-9]+]] {
+// CHECK13-SAME: (ptr noalias [[DYN_PTR:%.*]]) #[[ATTR10:[0-9]+]] {
 // CHECK13-NEXT:  entry:
 // CHECK13-NEXT:    [[DYN_PTR_ADDR:%.*]] = alloca ptr, align 8
 // CHECK13-NEXT:    store ptr [[DYN_PTR]], ptr [[DYN_PTR_ADDR]], align 8
@@ -6189,9 +5881,7 @@ int main() {
 // CHECK13-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP9]], 1
 // CHECK13-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK13-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP48]]
-// CHECK13-NEXT:    invoke void @_Z3foov()
-// CHECK13-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP48]]
-// CHECK13:       invoke.cont:
+// CHECK13-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP48]]
 // CHECK13-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK13:       omp.body.continue:
 // CHECK13-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
@@ -6212,12 +5902,6 @@ int main() {
 // CHECK13-NEXT:    br label [[DOTOMP_FINAL_DONE]]
 // CHECK13:       .omp.final.done:
 // CHECK13-NEXT:    ret void
-// CHECK13:       terminate.lpad:
-// CHECK13-NEXT:    [[TMP13:%.*]] = landingpad { ptr, i32 }
-// CHECK13-NEXT:            catch ptr null
-// CHECK13-NEXT:    [[TMP14:%.*]] = extractvalue { ptr, i32 } [[TMP13]], 0
-// CHECK13-NEXT:    call void @__clang_call_terminate(ptr [[TMP14]]) #[[ATTR12]], !llvm.access.group [[ACC_GRP48]]
-// CHECK13-NEXT:    unreachable
 //
 //
 // CHECK13-LABEL: define {{[^@]+}}@{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__Z5tmainI1SLi1EEiv_l57
@@ -6271,12 +5955,8 @@ int main() {
 // CHECK13-NEXT:    [[CMP1:%.*]] = icmp sle i32 [[TMP5]], [[TMP6]]
 // CHECK13-NEXT:    br i1 [[CMP1]], label [[OMP_INNER_FOR_BODY:%.*]], label [[OMP_INNER_FOR_END:%.*]]
 // CHECK13:       omp.inner.for.body:
-// CHECK13-NEXT:    invoke void @_ZN1SC1El(ptr nonnull align 8 dereferenceable(24) [[REF_TMP]], i64 23)
-// CHECK13-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP51]]
-// CHECK13:       invoke.cont:
-// CHECK13-NEXT:    [[CALL:%.*]] = invoke i8 @_ZN1ScvcEv(ptr nonnull align 8 dereferenceable(24) [[REF_TMP]])
-// CHECK13-NEXT:            to label [[INVOKE_CONT2:%.*]] unwind label [[TERMINATE_LPAD]], !llvm.access.group [[ACC_GRP51]]
-// CHECK13:       invoke.cont2:
+// CHECK13-NEXT:    call unwindabort void @_ZN1SC1El(ptr nonnull align 8 dereferenceable(24) [[REF_TMP]], i64 23), !llvm.access.group [[ACC_GRP51]]
+// CHECK13-NEXT:    [[CALL:%.*]] = call unwindabort i8 @_ZN1ScvcEv(ptr nonnull align 8 dereferenceable(24) [[REF_TMP]]), !llvm.access.group [[ACC_GRP51]]
 // CHECK13-NEXT:    [[TMP7:%.*]] = sext i8 [[CALL]] to i32
 // CHECK13-NEXT:    call void @__kmpc_push_num_threads(ptr @[[GLOB1]], i32 [[TMP1]], i32 [[TMP7]]), !llvm.access.group [[ACC_GRP51]]
 // CHECK13-NEXT:    call void @_ZN1SD1Ev(ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[REF_TMP]]) #[[ATTR4]], !llvm.access.group [[ACC_GRP51]]
@@ -6304,12 +5984,6 @@ int main() {
 // CHECK13-NEXT:    br label [[DOTOMP_FINAL_DONE]]
 // CHECK13:       .omp.final.done:
 // CHECK13-NEXT:    ret void
-// CHECK13:       terminate.lpad:
-// CHECK13-NEXT:    [[TMP16:%.*]] = landingpad { ptr, i32 }
-// CHECK13-NEXT:            catch ptr null
-// CHECK13-NEXT:    [[TMP17:%.*]] = extractvalue { ptr, i32 } [[TMP16]], 0
-// CHECK13-NEXT:    call void @__clang_call_terminate(ptr [[TMP17]]) #[[ATTR12]], !llvm.access.group [[ACC_GRP51]]
-// CHECK13-NEXT:    unreachable
 //
 //
 // CHECK13-LABEL: define {{[^@]+}}@{{__omp_offloading_[0-9a-z]+_[0-9a-z]+}}__Z5tmainI1SLi1EEiv_l57.omp_outlined.omp_outlined
@@ -6367,9 +6041,7 @@ int main() {
 // CHECK13-NEXT:    [[MUL:%.*]] = mul nsw i32 [[TMP9]], 1
 // CHECK13-NEXT:    [[ADD:%.*]] = add nsw i32 0, [[MUL]]
 // CHECK13-NEXT:    store i32 [[ADD]], ptr [[I]], align 4, !llvm.access.group [[ACC_GRP54]]
-// CHECK13-NEXT:    invoke void @_Z3foov()
-// CHECK13-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !llvm.access.group [[ACC_GRP54]]
-// CHECK13:       invoke.cont:
+// CHECK13-NEXT:    call unwindabort void @_Z3foov(), !llvm.access.group [[ACC_GRP54]]
 // CHECK13-NEXT:    br label [[OMP_BODY_CONTINUE:%.*]]
 // CHECK13:       omp.body.continue:
 // CHECK13-NEXT:    br label [[OMP_INNER_FOR_INC:%.*]]
@@ -6390,16 +6062,10 @@ int main() {
 // CHECK13-NEXT:    br label [[DOTOMP_FINAL_DONE]]
 // CHECK13:       .omp.final.done:
 // CHECK13-NEXT:    ret void
-// CHECK13:       terminate.lpad:
-// CHECK13-NEXT:    [[TMP13:%.*]] = landingpad { ptr, i32 }
-// CHECK13-NEXT:            catch ptr null
-// CHECK13-NEXT:    [[TMP14:%.*]] = extractvalue { ptr, i32 } [[TMP13]], 0
-// CHECK13-NEXT:    call void @__clang_call_terminate(ptr [[TMP14]]) #[[ATTR12]], !llvm.access.group [[ACC_GRP54]]
-// CHECK13-NEXT:    unreachable
 //
 //
 // CHECK13-LABEL: define {{[^@]+}}@_ZN1SD2Ev
-// CHECK13-SAME: (ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[THIS:%.*]]) unnamed_addr #[[ATTR8]] comdat {
+// CHECK13-SAME: (ptr nonnull align 8 dead_on_return(24) dereferenceable(24) [[THIS:%.*]]) unnamed_addr #[[ATTR7]] comdat {
 // CHECK13-NEXT:  entry:
 // CHECK13-NEXT:    [[THIS_ADDR:%.*]] = alloca ptr, align 8
 // CHECK13-NEXT:    store ptr [[THIS]], ptr [[THIS_ADDR]], align 8

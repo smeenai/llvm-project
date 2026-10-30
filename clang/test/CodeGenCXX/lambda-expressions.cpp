@@ -170,7 +170,9 @@ namespace pr28595 {
     // CHECK: landingpad
     // CHECK: br label %[[CLEANUP:.*]]{{$}}
     // CHECK: landingpad
-    // CHECK: invoke void @_ZN7pr285954TempD1Ev
+    //   The cleanup destruction of the temporary is a terminate-scope
+    //   'call unwindabort', not an invoke.
+    // CHECK: call unwindabort void @_ZN7pr285954TempD1Ev
     // CHECK: br label %[[CLEANUP]]
     //
     // CHECK: [[CLEANUP]]:

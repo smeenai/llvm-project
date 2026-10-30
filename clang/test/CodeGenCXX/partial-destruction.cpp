@@ -59,7 +59,7 @@ namespace test0 {
   // CHECK-NEXT: br i1 [[T0]],
   // CHECK:      [[E_AFTER:%.*]] = phi ptr [ [[PARTIAL_END]], {{%.*}} ], [ [[E_CUR:%.*]], {{%.*}} ]
   // CHECK-NEXT: [[E_CUR]] = getelementptr inbounds [[A]], ptr [[E_AFTER]], i64 -1
-  // CHECKv03-NEXT: invoke void @_ZN5test01AD1Ev(ptr {{[^,]*}} [[E_CUR]])
+  // CHECKv03-NEXT: call unwindabort void @_ZN5test01AD1Ev(ptr {{[^,]*}} [[E_CUR]])
   // CHECKv11-NEXT: call   void @_ZN5test01AD1Ev(ptr {{[^,]*}} [[E_CUR]])
   // CHECK:      [[T0:%.*]] = icmp eq ptr [[E_CUR]], [[AS]]
   // CHECK-NEXT: br i1 [[T0]],
@@ -81,14 +81,14 @@ namespace test0 {
   // CHECKv03-NEXT: br i1 [[T0]]
   // CHECKv03:      [[EDD_AFTER:%.*]] = phi ptr [ [[ED_CUR]], {{%.*}} ], [ [[EDD_CUR:%.*]], {{%.*}} ]
   // CHECKv03-NEXT: [[EDD_CUR]] = getelementptr inbounds [[A]], ptr [[EDD_AFTER]], i64 -1
-  // CHECKv03-NEXT: invoke void @_ZN5test01AD1Ev(ptr {{[^,]*}} [[EDD_CUR]])
+  // CHECKv03-NEXT: call unwindabort void @_ZN5test01AD1Ev(ptr {{[^,]*}} [[EDD_CUR]])
   // CHECKv03:      [[T0:%.*]] = icmp eq ptr [[EDD_CUR]], [[ED_BEGIN]]
   // CHECKv03-NEXT: br i1 [[T0]]
 
   // Back to the primary EH destructor.
   // CHECK:      [[E_AFTER:%.*]] = phi ptr [ [[E_END]], {{%.*}} ], [ [[E_CUR:%.*]], {{%.*}} ]
   // CHECK-NEXT: [[E_CUR]] = getelementptr inbounds [[A]], ptr [[E_AFTER]], i64 -1
-  // CHECKv03-NEXT: invoke void @_ZN5test01AD1Ev(ptr {{[^,]*}} [[E_CUR]])
+  // CHECKv03-NEXT: call unwindabort void @_ZN5test01AD1Ev(ptr {{[^,]*}} [[E_CUR]])
   // CHECKv11-NEXT: call   void @_ZN5test01AD1Ev(ptr {{[^,]*}} [[E_CUR]])
   // CHECK:      [[T0:%.*]] = icmp eq ptr [[E_CUR]], [[E0]]
   // CHECK-NEXT: br i1 [[T0]],
@@ -122,8 +122,8 @@ namespace test1 {
   // CHECK-NEXT:   cleanup
   // CHECK:      landingpad { ptr, i32 }
   // CHECK-NEXT:   cleanup
-  // CHECKv03:      invoke void @_ZN5test11AD1Ev(ptr {{[^,]*}} [[Y]])
-  // CHECKv03:      invoke void @_ZN5test11AD1Ev(ptr {{[^,]*}} [[V]])
+  // CHECKv03:      call unwindabort void @_ZN5test11AD1Ev(ptr {{[^,]*}} [[Y]])
+  // CHECKv03:      call unwindabort void @_ZN5test11AD1Ev(ptr {{[^,]*}} [[V]])
   // CHECKv11:      call   void @_ZN5test11AD1Ev(ptr {{[^,]*}} [[Y]])
   // CHECKv11:      call   void @_ZN5test11AD1Ev(ptr {{[^,]*}} [[V]])
 }
@@ -157,7 +157,7 @@ namespace test2 {
     // CHECK-NEXT: br i1 [[EMPTY]],
     // CHECK:      [[PAST:%.*]] = phi ptr [ [[CUR]], {{%.*}} ], [ [[DEL:%.*]], {{%.*}} ]
     // CHECK-NEXT: [[DEL]] = getelementptr inbounds [[A]], ptr [[PAST]], i64 -1
-    // CHECKv03-NEXT: invoke void @_ZN5test21AD1Ev(ptr {{[^,]*}} [[DEL]])
+    // CHECKv03-NEXT: call unwindabort void @_ZN5test21AD1Ev(ptr {{[^,]*}} [[DEL]])
     // CHECKv11-NEXT: call   void @_ZN5test21AD1Ev(ptr {{[^,]*}} [[DEL]])
     // CHECK:      [[T0:%.*]] = icmp eq ptr [[DEL]], [[BEGIN]]
     // CHECK-NEXT: br i1 [[T0]],

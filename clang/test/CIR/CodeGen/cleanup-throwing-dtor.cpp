@@ -89,7 +89,8 @@ void test_throwing_dtor_cleanup() {
 // LLVM:   call void @_ZSt9terminatev()
 // LLVM:   unreachable
 
-// Same structural flow from original Clang CodeGen.
+// Same structural flow from original Clang CodeGen, except that the EH-path
+// dtor call is marked unwindabort instead of unwinding to a terminate block.
 //
 // OGCG: define dso_local void @_Z26test_throwing_dtor_cleanupv()
 // OGCG-SAME: personality ptr @__gxx_personality_v0
@@ -102,17 +103,5 @@ void test_throwing_dtor_cleanup() {
 // OGCG: [[LPAD]]:
 // OGCG:   landingpad { ptr, i32 }
 // OGCG:           cleanup
-// OGCG:   invoke void @_ZN12ThrowingDtorD1Ev(ptr {{.*}} %[[C]])
-// OGCG:           to label %[[RESUME:.*]] unwind label %[[TERMINATE:.*]]
-// OGCG: [[RESUME]]:
+// OGCG:   call unwindabort void @_ZN12ThrowingDtorD1Ev(ptr {{.*}} %[[C]])
 // OGCG:   resume { ptr, i32 }
-// OGCG: [[TERMINATE]]:
-// OGCG:   landingpad { ptr, i32 }
-// OGCG:           catch ptr null
-// OGCG:   call void @__clang_call_terminate(ptr
-// OGCG:   unreachable
-//
-// OGCG: define linkonce_odr hidden void @__clang_call_terminate(ptr {{.*}} %[[EXN:.*]])
-// OGCG:   call ptr @__cxa_begin_catch(ptr %[[EXN]])
-// OGCG:   call void @_ZSt9terminatev()
-// OGCG:   unreachable

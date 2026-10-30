@@ -76,11 +76,9 @@ namespace test1 {
     return new A(B().x);
   }
 
-  //   Terminate landing pads should call __cxa_begin_catch first.
-  // CHECK98:      define linkonce_odr hidden void @__clang_call_terminate(ptr %0) [[NI_NR_NUW:#[0-9]+]] comdat
-  // CHECK98-NEXT:   [[T0:%.*]] = call ptr @__cxa_begin_catch(ptr %0) [[NUW:#[0-9]+]]
-  // CHECK98-NEXT:   call void @_ZSt9terminatev() [[NR_NUW:#[0-9]+]]
-  // CHECK98-NEXT:   unreachable
+  //   Terminate scopes now emit 'call unwindabort' instead of a terminate
+  //   landingpad, so __clang_call_terminate is no longer generated (verified
+  //   with a CHECK-NOT at the end of the file).
 
   A *d() {
     // CHECK:    define{{( dso_local)?}} ptr @_ZN5test11dEv()
@@ -179,10 +177,9 @@ namespace test2 {
     // CHECK-NEXT: invoke void @_ZN5test21AC1Ei(ptr {{[^,]*}} [[NEW]], i32 5)
     // CHECK:      ret ptr [[NEW]]
 
-    // CHECK98:      invoke void @_ZN5test21AdlEPvm(ptr [[NEW]], i64 8)
+    //   The matching operator delete cleanup runs as a 'call unwindabort'.
+    // CHECK98:      call unwindabort void @_ZN5test21AdlEPvm(ptr [[NEW]], i64 8)
     // CHECK11:      call void @_ZN5test21AdlEPvm(ptr [[NEW]], i64 8)
-
-    // CHECK98:      call void @__clang_call_terminate(ptr {{%.*}}) [[NR_NUW]]
     return new A(5);
   }
 }
@@ -207,10 +204,8 @@ namespace test3 {
     // CHECK-NEXT: invoke void @_ZN5test31AC1Ei(ptr {{[^,]*}} [[NEW]], i32 5)
     // CHECK:      ret ptr [[NEW]]
 
-    // CHECK98:      invoke void @_ZN5test31AdlEPvS1_d(ptr [[NEW]], ptr [[FOO]], double [[BAR]])
+    // CHECK98:      call unwindabort void @_ZN5test31AdlEPvS1_d(ptr [[NEW]], ptr [[FOO]], double [[BAR]])
     // CHECK11:      call void @_ZN5test31AdlEPvS1_d(ptr [[NEW]], ptr [[FOO]], double [[BAR]])
-
-    // CHECK98:      call void @__clang_call_terminate(ptr {{%.*}}) [[NR_NUW]]
     return new(foo(),bar()) A(5);
   }
 
@@ -251,7 +246,7 @@ namespace test3 {
     // CHECK:      [[V0:%.*]] = load ptr, ptr [[SAVED0]]
     // CHECK-NEXT: [[V1:%.*]] = load ptr, ptr [[SAVED1]]
 
-    // CHECK98-NEXT: invoke void @_ZN5test31AdlEPvS1_d(ptr [[V0]], ptr [[V1]], double [[CONST]])
+    // CHECK98-NEXT: call unwindabort void @_ZN5test31AdlEPvS1_d(ptr [[V0]], ptr [[V1]], double [[CONST]])
     // CHECK11-NEXT: call void @_ZN5test31AdlEPvS1_d(ptr [[V0]], ptr [[V1]], double [[CONST]])
   }
 }
@@ -296,13 +291,15 @@ namespace test5 {
   // CHECK-NEXT: invoke void @_ZN5test53fooEv()
   // CHECK:      [[EXN:%.*]] = load ptr, ptr [[EXNSLOT]]
   // CHECK-NEXT: [[ADJ:%.*]] = call ptr @__cxa_get_exception_ptr(ptr [[EXN]])
-  // CHECK-NEXT: invoke void @_ZN5test51TC1Ev(ptr {{[^,]*}} [[T]])
-  // CHECK:      invoke void @_ZN5test51AC1ERKS0_RKNS_1TE(ptr {{[^,]*}} [[A:%.*]], ptr nonnull align {{[0-9]+}} dereferenceable({{[0-9]+}}) [[ADJ]], ptr nonnull align {{[0-9]+}} dereferenceable({{[0-9]+}}) [[T]])
+  //   Construction/destruction of the catch parameter is terminate-scoped, so
+  //   these are 'call unwindabort's rather than invokes.
+  // CHECK-NEXT: call unwindabort void @_ZN5test51TC1Ev(ptr {{[^,]*}} [[T]])
+  // CHECK:      call unwindabort void @_ZN5test51AC1ERKS0_RKNS_1TE(ptr {{[^,]*}} [[A:%.*]], ptr nonnull align {{[0-9]+}} dereferenceable({{[0-9]+}}) [[ADJ]], ptr nonnull align {{[0-9]+}} dereferenceable({{[0-9]+}}) [[T]])
 
-  // CHECK98:      invoke void @_ZN5test51TD1Ev(ptr {{[^,]*}} [[T]])
+  // CHECK98:      call unwindabort void @_ZN5test51TD1Ev(ptr {{[^,]*}} [[T]])
   // CHECK11:      call void @_ZN5test51TD1Ev(ptr {{[^,]*}} [[T]])
 
-  // CHECK98:      call ptr @__cxa_begin_catch(ptr [[EXN]]) [[NUW]]
+  // CHECK98:      call ptr @__cxa_begin_catch(ptr [[EXN]]) [[NUW:#[0-9]+]]
   // CHECK98-NEXT: invoke void @_ZN5test51AD1Ev(ptr {{[^,]*}} [[A:%.*]])
 
   // CHECK:      call void @__cxa_end_catch()
@@ -466,7 +463,10 @@ namespace test10 {
   // CHECK-LABEL:    define{{.*}} void @_ZN6test101BD1Ev(
   // CHECK:      invoke void @_ZN6test107cleanupEv()
   // CHECK:      call ptr @__cxa_begin_catch
-  // CHECK-NEXT: invoke void @__cxa_rethrow()
+  //   The rethrow on fallthrough: an invoke in C++98, a 'call unwindabort' in
+  //   the C++11 (noexcept destructor) terminate scope.
+  // CHECK98-NEXT: invoke void @__cxa_rethrow()
+  // CHECK11-NEXT: call unwindabort void @__cxa_rethrow()
   // CHECK:      unreachable
 
   struct C { ~C(); };
@@ -480,16 +480,18 @@ namespace test10 {
 
   // CHECK98:      call void @__cxa_end_catch()
   // CHECK98-NEXT: br label
-  // THROWEND11:        invoke void @__cxa_end_catch()
-  // THROWEND11-NEXT:   to label %invoke.cont[[#]] unwind label %terminate.lpad
+  //   With unwindabort there is no terminate landingpad: the throwing
+  //   __cxa_end_catch becomes a 'call unwindabort'.
+  // THROWEND11:        call unwindabort void @__cxa_end_catch()
   // NOTHROWEND11:      call void @__cxa_end_catch()
   // NOTHROWEND11-NEXT: br label %try.cont
 
-  // CHECK:      invoke void @__cxa_rethrow()
-  // CHECK:      unreachable
-
-  // CHECK:      terminate.lpad:
-  // CHECK:        call void @__clang_call_terminate(
+  //   The rethrow on fallthrough: an invoke in C++98 (real cleanup follows),
+  //   a 'call unwindabort' in the C++11 terminate-scope variants.
+  // CHECK98:      invoke void @__cxa_rethrow()
+  // CHECK98:      unreachable
+  // CHECK11:      call unwindabort void @__cxa_rethrow()
+  // CHECK11:      unreachable
 }
 
 // Ensure that an exception in a constructor destroys
@@ -534,7 +536,7 @@ namespace test11 {
   // CHECK:      [[AFTER:%.*]] = phi ptr [ [[CUR]], {{%.*}} ], [ [[ELT:%.*]], {{%.*}} ]
   // CHECK-NEXT: [[ELT]] = getelementptr inbounds [[A:%.*]], ptr [[AFTER]], i64 -1
 
-  // CHECK98-NEXT: invoke void @_ZN6test111AD1Ev(ptr {{[^,]*}} [[ELT]])
+  // CHECK98-NEXT: call unwindabort void @_ZN6test111AD1Ev(ptr {{[^,]*}} [[ELT]])
   // CHECK11-NEXT: call void @_ZN6test111AD1Ev(ptr {{[^,]*}} [[ELT]])
 
   // CHECK:      [[DONE:%.*]] = icmp eq ptr [[ELT]], [[ARRAYBEGIN]]
@@ -550,7 +552,7 @@ namespace test11 {
   // CHECK:      [[AFTER:%.*]] = phi ptr [ [[ARRAYEND]], {{%.*}} ], [ [[ELT:%.*]], {{%.*}} ]
   // CHECK-NEXT: [[ELT]] = getelementptr inbounds [[A]], ptr [[AFTER]], i64 -1
 
-  // CHECK98-NEXT: invoke void @_ZN6test111AD1Ev(ptr {{[^,]*}} [[ELT]])
+  // CHECK98-NEXT: call unwindabort void @_ZN6test111AD1Ev(ptr {{[^,]*}} [[ELT]])
   // CHECK11-NEXT: call void @_ZN6test111AD1Ev(ptr {{[^,]*}} [[ELT]])
 
   // CHECK:      [[DONE:%.*]] = icmp eq ptr [[ELT]], [[ARRAYBEGIN]]
@@ -559,7 +561,7 @@ namespace test11 {
   // CHECK:      br label
   //   Finally, the cleanup for single.
 
-  // CHECK98:      invoke void @_ZN6test111AD1Ev(ptr {{[^,]*}} [[THIS]])
+  // CHECK98:      call unwindabort void @_ZN6test111AD1Ev(ptr {{[^,]*}} [[THIS]])
   // CHECK11:      call void @_ZN6test111AD1Ev(ptr {{[^,]*}} [[THIS]])
 
   // CHECK:      br label
@@ -581,7 +583,7 @@ namespace test12 {
   // CHECK-NEXT:  invoke void @_ZN6test121AC1Ev(ptr {{[^,]*}} [[PTR]])
   // CHECK:       ret ptr [[PTR]]
 
-  // CHECK98:       invoke void @_ZN6test121AdlEPvS1_(ptr [[PTR]], ptr [[PTR]])
+  // CHECK98:       call unwindabort void @_ZN6test121AdlEPvS1_(ptr [[PTR]], ptr [[PTR]])
   // CHECK11:       call void @_ZN6test121AdlEPvS1_(ptr [[PTR]], ptr [[PTR]])
 }
 
@@ -622,4 +624,6 @@ void test(int c) {
 
 }
 
-// CHECK98: attributes [[NI_NR_NUW]] = { noinline noreturn nounwind {{.*}} }
+//   __clang_call_terminate is no longer generated for the Itanium personality:
+//   terminate scopes use 'call unwindabort'.
+// CHECK-NOT: @__clang_call_terminate

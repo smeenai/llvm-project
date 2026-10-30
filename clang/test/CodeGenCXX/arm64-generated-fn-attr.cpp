@@ -19,19 +19,19 @@ extern thread_local Example var2;
 extern void fn();
 
 int testfn() noexcept {
-  // Calling fn in a noexcept function causes __clang_call_terminate to be generated
+  // Calling fn in a noexcept function emits a 'call unwindabort' (no terminate
+  // landingpad / __clang_call_terminate is generated).
   fn();
   // Use of var1 and var2 causes TLS wrapper functions to be generated
   return var1.fn() + var2.fn();
 }
 
 // CHECK: define {{.*}} @__cxx_global_var_init() [[ATTR1:#[0-9]+]]
-// CHECK: define {{.*}} @__clang_call_terminate({{.*}}) [[ATTR2:#[0-9]+]]
 // CHECK: define {{.*}} @_ZTW4var1() [[ATTR1]]
 // CHECK: define {{.*}} @_ZTW4var2() [[ATTR1]]
 // CHECK: define {{.*}} @__tls_init() [[ATTR1]]
 
 // BTE-SIGNRA: attributes [[ATTR1]] = { {{.*}}"branch-target-enforcement" {{.*}}"sign-return-address"="all" "sign-return-address-key"="a_key"
-// BTE-SIGNRA: attributes [[ATTR2]] = { {{.*}}"branch-target-enforcement" {{.*}}"sign-return-address"="all" "sign-return-address-key"="a_key"
 // PAUTHTEST: attributes [[ATTR1]] = { {{.*}}"ptrauth-auth-traps" "ptrauth-calls" "ptrauth-indirect-gotos" "ptrauth-returns"
-// PAUTHTEST: attributes [[ATTR2]] = { {{.*}}"ptrauth-auth-traps" "ptrauth-calls" "ptrauth-indirect-gotos" "ptrauth-returns"
+
+// CHECK-NOT: @__clang_call_terminate

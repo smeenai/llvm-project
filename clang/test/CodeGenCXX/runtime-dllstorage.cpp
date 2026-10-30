@@ -116,7 +116,8 @@ void l() {
 
 // CHECK-IA-DAG: @_ZTH1t = dso_local alias void (), ptr @__tls_init
 // CHECK-IA-DAG: declare dso_local i32 @__gxx_personality_v0(...)
-// CHECK-IA-DAG: define linkonce_odr hidden void @__clang_call_terminate(ptr noundef %0)
+//   __clang_call_terminate is no longer generated: noexcept/terminate-scope
+//   calls are emitted as 'call unwindabort'.
 
 // CHECK-DYNAMIC-IA-DAG: declare dllimport i32 @__cxa_thread_atexit(ptr, ptr, ptr)
 // CHECK-DYNAMIC-IA-DAG: declare dllimport i32 @__cxa_atexit(ptr, ptr, ptr)
@@ -152,7 +153,10 @@ void l() {
 // CHECK-STATIC-NODECL-IA-DAG: declare dso_local void @__cxa_guard_release(ptr)
 // CHECK-STATIC-IMPORT-IA-DAG: declare dso_local void @__cxa_guard_release(ptr)
 // CHECK-STATIC-EXPORT-IA-DAG: declare dso_local void @__cxa_guard_release(ptr)
-// CHECK-STATIC-IA-DAG: declare dso_local void @_ZSt9terminatev()
+//   _ZSt9terminatev is now only referenced from the explicit std::terminate()
+//   call (l()), since __clang_call_terminate is no longer emitted; so under
+//   -DIMPORT_DECLARATIONS it keeps its dllimport storage class.
+// CHECK-STATIC-DECL-IA-DAG: declare dso_local void @_ZSt9terminatev()
 // CHECK-STATIC-NODECL-IA-DAG: declare dso_local void @_ZSt9terminatev()
-// CHECK-STATIC-IMPORT-IA-DAG: declare dso_local void @_ZSt9terminatev()
+// CHECK-STATIC-IMPORT-IA-DAG: declare dllimport void @_ZSt9terminatev()
 // CHECK-STATIC-EXPORT-IA-DAG: declare dso_local dllexport void @_ZSt9terminatev()

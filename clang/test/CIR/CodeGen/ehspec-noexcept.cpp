@@ -30,18 +30,22 @@ void target() noexcept {
 
 // LLVM-LABEL: define{{.*}} void @_Z6targetv()
 // LLVM-SAME: personality ptr @__gxx_personality_v0
-// LLVM:         invoke void @_Z8externalv()
-// LLVM-NEXT:            to label %[[CONT:[^ ,]+]] unwind label %[[LPAD:[^ ,]+]]
-// LLVM:       {{^}}[[CONT]]:
-// LLVM:       {{^}}[[LPAD]]:
-// LLVM-NEXT:    %{{.*}} = landingpad { ptr, i32 }
+// LLVMCIR:      invoke void @_Z8externalv()
+// LLVMCIR-NEXT:         to label %[[CONT:[^ ,]+]] unwind label %[[LPAD:[^ ,]+]]
+// LLVMCIR:    {{^}}[[CONT]]:
+// LLVMCIR:    {{^}}[[LPAD]]:
+// LLVMCIR-NEXT: %{{.*}} = landingpad { ptr, i32 }
 //      The catch-all clause accepts every exception, so there is no selector
 //      comparison and no resume path.
-// LLVM-NEXT:            catch ptr null
-// LLVM-NOT:     icmp
-// LLVM-NOT:     resume
-// LLVM:         call void @__clang_call_terminate(ptr %{{.*}})
-// LLVM-NEXT:    unreachable
+// LLVMCIR-NEXT:         catch ptr null
+// LLVMCIR-NOT:  icmp
+// LLVMCIR-NOT:  resume
+// LLVMCIR:      call void @__clang_call_terminate(ptr %{{.*}})
+// LLVMCIR-NEXT: unreachable
+//      Classic codegen marks the call unwindabort instead of emitting a
+//      terminate landing pad.
+// OGCG:         call unwindabort void @_Z8externalv()
+// OGCG-NEXT:    ret void
 // LLVM-NOT:     resume
 
 // In C++17, 'throw()' is a terminate scope rather than an empty dynamic
@@ -60,14 +64,17 @@ void target2() throw() {
 
 // LLVM-LABEL: define{{.*}} void @_Z7target2v()
 // LLVM-SAME: personality ptr @__gxx_personality_v0
-// LLVM:         invoke void @_Z8externalv()
-// LLVM-NEXT:            to label %{{[^ ,]+}} unwind label %[[LPAD:[^ ,]+]]
-// LLVM:       {{^}}[[LPAD]]:
-// LLVM-NEXT:    %{{.*}} = landingpad { ptr, i32 }
-// LLVM-NEXT:            catch ptr null
-// LLVM-NOT:     __cxa_call_unexpected
-// LLVM:         call void @__clang_call_terminate(ptr %{{.*}})
-// LLVM-NEXT:    unreachable
+// LLVMCIR:      invoke void @_Z8externalv()
+// LLVMCIR-NEXT:         to label %{{[^ ,]+}} unwind label %[[LPAD:[^ ,]+]]
+// LLVMCIR:    {{^}}[[LPAD]]:
+// LLVMCIR-NEXT: %{{.*}} = landingpad { ptr, i32 }
+// LLVMCIR-NEXT:         catch ptr null
+// LLVMCIR-NOT:  __cxa_call_unexpected
+// LLVMCIR:      call void @__clang_call_terminate(ptr %{{.*}})
+// LLVMCIR-NEXT: unreachable
+// OGCG-NOT:     __cxa_call_unexpected
+// OGCG:         call unwindabort void @_Z8externalv()
+// OGCG-NEXT:    ret void
 
 void permissive() noexcept {
   harmless();

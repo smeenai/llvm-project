@@ -325,7 +325,7 @@ namespace test5 {
   // CHECK5v03-NEXT: br i1 [[EMPTY]]
   // CHECK5v03:      [[AFTER:%.*]] = phi ptr [ [[ELT]], {{%.*}} ], [ [[CUR:%.*]], {{%.*}} ]
   // CHECK5v03-NEXT: [[CUR:%.*]] = getelementptr inbounds [[A]], ptr [[AFTER]], i64 -1
-  // CHECK5v03-NEXT: invoke void @_ZN5test51AD1Ev(ptr {{[^,]*}} [[CUR]])
+  // CHECK5v03-NEXT: call unwindabort void @_ZN5test51AD1Ev(ptr {{[^,]*}} [[CUR]])
   // CHECK5v03:      [[DONE:%.*]] = icmp eq ptr [[CUR]], [[BEGIN]]
   // CHECK5v03-NEXT: br i1 [[DONE]],
   // CHECK5v11-NOT: landingpad
@@ -359,7 +359,10 @@ namespace test6 {
 
   C::~C() { opaque(); }
   // CHECK5-LABEL: define{{.*}} void @_ZN5test61CD2Ev(ptr {{[^,]*}} %this, ptr noundef %vtt) unnamed_addr
-  // CHECK5:   invoke void @_ZN5test66opaqueEv
+  //   ~C() is noexcept in C++11, so opaque() is a 'call unwindabort'; in C++03
+  //   it is an invoke since the member dtors still need EH cleanup.
+  // CHECK5v03:   invoke void @_ZN5test66opaqueEv
+  // CHECK5v11:   call unwindabort void @_ZN5test66opaqueEv
   // CHECK5v03:   invoke void @_ZN5test61AD1Ev
   // CHECK5v03:   invoke void @_ZN5test61AD1Ev
   // CHECK5v03:   invoke void @_ZN5test61AD1Ev
@@ -370,19 +373,21 @@ namespace test6 {
   // CHECK5v11:   call   void @_ZN5test61BILj1EED2Ev
   // CHECK5:   call void @_ZN5test61BILj0EED2Ev
   // CHECK5:   ret void
-  // CHECK5v03:   invoke void @_ZN5test61AD1Ev
-  // CHECK5v03:   invoke void @_ZN5test61AD1Ev
-  // CHECK5v03:   invoke void @_ZN5test61AD1Ev
-  // CHECK5v03:   invoke void @_ZN5test61BILj1EED2Ev
-  // CHECK5v03:   invoke void @_ZN5test61BILj0EED2Ev
+  //   The duplicate destructor cleanups in the landingpads are terminate-scope
+  //   'call unwindabort's now, not invokes.
+  // CHECK5v03:   call unwindabort void @_ZN5test61AD1Ev
+  // CHECK5v03:   call unwindabort void @_ZN5test61AD1Ev
+  // CHECK5v03:   call unwindabort void @_ZN5test61AD1Ev
+  // CHECK5v03:   call unwindabort void @_ZN5test61BILj1EED2Ev
+  // CHECK5v03:   call unwindabort void @_ZN5test61BILj0EED2Ev
 
   // CHECK5-LABEL: define{{.*}} void @_ZN5test61CD1Ev(ptr {{[^,]*}} %this) unnamed_addr
   // CHECK5v03:   invoke void @_ZN5test61CD2Ev
   // CHECK5v03:   invoke void @_ZN5test61BILj3EED2Ev
   // CHECK5v03:   call void @_ZN5test61BILj2EED2Ev
   // CHECK5v03:   ret void
-  // CHECK5v03:   invoke void @_ZN5test61BILj3EED2Ev
-  // CHECK5v03:   invoke void @_ZN5test61BILj2EED2Ev
+  // CHECK5v03:   call unwindabort void @_ZN5test61BILj3EED2Ev
+  // CHECK5v03:   call unwindabort void @_ZN5test61BILj2EED2Ev
 
   // CHECK5v11:   call void @_ZN5test61CD2Ev
   // CHECK5v11:   call void @_ZN5test61BILj3EED2Ev

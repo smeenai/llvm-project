@@ -65,6 +65,18 @@ struct EHPersonality {
   bool isWasmPersonality() const { return this == &GNU_Wasm_CPlusPlus; }
 
   bool isMSVCXXPersonality() const { return this == &MSVC_CxxFrameHandler3; }
+
+  // Does the personality function cause std::terminate() to be called properly,
+  // if an unwindabort call unwinds?  This is generally true for C++
+  // personalities, but so far only tested on a few, so only enable it for
+  // those.
+  //
+  // TODO: determine which of the other personalities also support this
+  // behavior. MSVC unwind support will take more implementation work in LLVM,
+  // but should be possible to make work.
+  bool supportsUnwindAbort() const {
+    return this == &GNU_CPlusPlus || this == &NeXT_ObjC;
+  }
 };
 
 /// Selects the personality function to use for \p FD, or for the translation

@@ -360,9 +360,7 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK1-NEXT:    [[TMP6:%.*]] = icmp ne i32 [[TMP5]], 0
 // CHECK1-NEXT:    br i1 [[TMP6]], label [[OMP_IF_THEN3:%.*]], label [[OMP_IF_END4:%.*]]
 // CHECK1:       omp_if.then3:
-// CHECK1-NEXT:    invoke void @_Z3foov()
-// CHECK1-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]]
-// CHECK1:       invoke.cont:
+// CHECK1-NEXT:    call unwindabort void @_Z3foov()
 // CHECK1-NEXT:    call void @__kmpc_end_single(ptr @[[GLOB1]], i32 [[TMP0]])
 // CHECK1-NEXT:    store i32 1, ptr [[DOTOMP_COPYPRIVATE_DID_IT]], align 4
 // CHECK1-NEXT:    br label [[OMP_IF_END4]]
@@ -384,12 +382,6 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK1-NEXT:    [[TMP15:%.*]] = load i8, ptr [[A]], align 1
 // CHECK1-NEXT:    [[CONV:%.*]] = sext i8 [[TMP15]] to i32
 // CHECK1-NEXT:    ret i32 [[CONV]]
-// CHECK1:       terminate.lpad:
-// CHECK1-NEXT:    [[TMP16:%.*]] = landingpad { ptr, i32 }
-// CHECK1-NEXT:            catch ptr null
-// CHECK1-NEXT:    [[TMP17:%.*]] = extractvalue { ptr, i32 } [[TMP16]], 0
-// CHECK1-NEXT:    call void @__clang_call_terminate(ptr [[TMP17]]) #[[ATTR11:[0-9]+]]
-// CHECK1-NEXT:    unreachable
 //
 //
 // CHECK1-LABEL: define {{[^@]+}}@_ZN3SSTIdEC1Ev
@@ -415,15 +407,8 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK1-NEXT:    ret void
 //
 //
-// CHECK1-LABEL: define {{[^@]+}}@__clang_call_terminate
-// CHECK1-SAME: (ptr noundef [[TMP0:%.*]]) #[[ATTR7:[0-9]+]] comdat {
-// CHECK1-NEXT:    [[TMP2:%.*]] = call ptr @__cxa_begin_catch(ptr [[TMP0]]) #[[ATTR3]]
-// CHECK1-NEXT:    call void @_ZSt9terminatev() #[[ATTR11]]
-// CHECK1-NEXT:    unreachable
-//
-//
 // CHECK1-LABEL: define {{[^@]+}}@.omp.copyprivate.copy_func
-// CHECK1-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR8:[0-9]+]] {
+// CHECK1-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR7:[0-9]+]] {
 // CHECK1-NEXT:  entry:
 // CHECK1-NEXT:    [[DOTADDR:%.*]] = alloca ptr, align 8
 // CHECK1-NEXT:    [[DOTADDR1:%.*]] = alloca ptr, align 8
@@ -503,7 +488,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK1-LABEL: define {{[^@]+}}@_ZN3SSTIdEC2Ev.omp_outlined
-// CHECK1-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]]) #[[ATTR10:[0-9]+]] personality ptr @__gxx_personality_v0 {
+// CHECK1-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]]) #[[ATTR9:[0-9]+]] personality ptr @__gxx_personality_v0 {
 // CHECK1-NEXT:  entry:
 // CHECK1-NEXT:    [[DOTGLOBAL_TID__ADDR:%.*]] = alloca ptr, align 8
 // CHECK1-NEXT:    [[DOTBOUND_TID__ADDR:%.*]] = alloca ptr, align 8
@@ -534,9 +519,7 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK1-NEXT:    [[TMP7:%.*]] = getelementptr inbounds nuw [[CLASS_ANON]], ptr [[REF_TMP]], i32 0, i32 1
 // CHECK1-NEXT:    [[TMP8:%.*]] = load ptr, ptr [[_TMP1]], align 8, !nonnull [[META2]], !align [[META3]]
 // CHECK1-NEXT:    store ptr [[TMP8]], ptr [[TMP7]], align 8
-// CHECK1-NEXT:    invoke void @_ZZN3SSTIdEC1EvENKUlvE_clEv(ptr noundef nonnull align 8 dereferenceable(16) [[REF_TMP]])
-// CHECK1-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]]
-// CHECK1:       invoke.cont:
+// CHECK1-NEXT:    call unwindabort void @_ZZN3SSTIdEC1EvENKUlvE_clEv(ptr noundef nonnull align 8 dereferenceable(16) [[REF_TMP]])
 // CHECK1-NEXT:    call void @__kmpc_end_single(ptr @[[GLOB1]], i32 [[TMP3]])
 // CHECK1-NEXT:    store i32 1, ptr [[DOTOMP_COPYPRIVATE_DID_IT]], align 4
 // CHECK1-NEXT:    br label [[OMP_IF_END]]
@@ -547,12 +530,6 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK1-NEXT:    [[TMP11:%.*]] = load i32, ptr [[DOTOMP_COPYPRIVATE_DID_IT]], align 4
 // CHECK1-NEXT:    call void @__kmpc_copyprivate(ptr @[[GLOB1]], i32 [[TMP3]], i64 8, ptr [[DOTOMP_COPYPRIVATE_CPR_LIST]], ptr @.omp.copyprivate.copy_func.5, i32 [[TMP11]])
 // CHECK1-NEXT:    ret void
-// CHECK1:       terminate.lpad:
-// CHECK1-NEXT:    [[TMP12:%.*]] = landingpad { ptr, i32 }
-// CHECK1-NEXT:            catch ptr null
-// CHECK1-NEXT:    [[TMP13:%.*]] = extractvalue { ptr, i32 } [[TMP12]], 0
-// CHECK1-NEXT:    call void @__clang_call_terminate(ptr [[TMP13]]) #[[ATTR11]]
-// CHECK1-NEXT:    unreachable
 //
 //
 // CHECK1-LABEL: define {{[^@]+}}@_ZZN3SSTIdEC1EvENKUlvE_clEv
@@ -575,7 +552,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK1-LABEL: define {{[^@]+}}@.omp.copyprivate.copy_func.5
-// CHECK1-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR8]] {
+// CHECK1-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR7]] {
 // CHECK1-NEXT:  entry:
 // CHECK1-NEXT:    [[DOTADDR:%.*]] = alloca ptr, align 8
 // CHECK1-NEXT:    [[DOTADDR1:%.*]] = alloca ptr, align 8
@@ -616,7 +593,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK1-LABEL: define {{[^@]+}}@_ZZZN3SSTIdEC1EvENKUlvE_clEvENKUlvE_clEv.omp_outlined
-// CHECK1-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]]) #[[ATTR10]] {
+// CHECK1-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]]) #[[ATTR9]] {
 // CHECK1-NEXT:  entry:
 // CHECK1-NEXT:    [[DOTGLOBAL_TID__ADDR:%.*]] = alloca ptr, align 8
 // CHECK1-NEXT:    [[DOTBOUND_TID__ADDR:%.*]] = alloca ptr, align 8
@@ -658,7 +635,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK1-LABEL: define {{[^@]+}}@.omp.copyprivate.copy_func.6
-// CHECK1-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR8]] {
+// CHECK1-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR7]] {
 // CHECK1-NEXT:  entry:
 // CHECK1-NEXT:    [[DOTADDR:%.*]] = alloca ptr, align 8
 // CHECK1-NEXT:    [[DOTADDR1:%.*]] = alloca ptr, align 8
@@ -726,7 +703,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK1-LABEL: define {{[^@]+}}@_ZN2SSC2ERi.omp_outlined
-// CHECK1-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]], i64 noundef [[B:%.*]], i64 noundef [[C:%.*]]) #[[ATTR10]] personality ptr @__gxx_personality_v0 {
+// CHECK1-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]], i64 noundef [[B:%.*]], i64 noundef [[C:%.*]]) #[[ATTR9]] personality ptr @__gxx_personality_v0 {
 // CHECK1-NEXT:  entry:
 // CHECK1-NEXT:    [[DOTGLOBAL_TID__ADDR:%.*]] = alloca ptr, align 8
 // CHECK1-NEXT:    [[DOTBOUND_TID__ADDR:%.*]] = alloca ptr, align 8
@@ -771,9 +748,7 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK1-NEXT:    [[TMP11:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_1]], ptr [[REF_TMP]], i32 0, i32 3
 // CHECK1-NEXT:    [[TMP12:%.*]] = load ptr, ptr [[_TMP3]], align 8, !nonnull [[META2]], !align [[META6]]
 // CHECK1-NEXT:    store ptr [[TMP12]], ptr [[TMP11]], align 8
-// CHECK1-NEXT:    invoke void @_ZZN2SSC1ERiENKUlvE_clEv(ptr noundef nonnull align 8 dereferenceable(32) [[REF_TMP]])
-// CHECK1-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]]
-// CHECK1:       invoke.cont:
+// CHECK1-NEXT:    call unwindabort void @_ZZN2SSC1ERiENKUlvE_clEv(ptr noundef nonnull align 8 dereferenceable(32) [[REF_TMP]])
 // CHECK1-NEXT:    call void @__kmpc_end_single(ptr @[[GLOB1]], i32 [[TMP4]])
 // CHECK1-NEXT:    store i32 1, ptr [[DOTOMP_COPYPRIVATE_DID_IT]], align 4
 // CHECK1-NEXT:    br label [[OMP_IF_END]]
@@ -789,12 +764,6 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK1-NEXT:    [[TMP18:%.*]] = load i32, ptr [[DOTOMP_COPYPRIVATE_DID_IT]], align 4
 // CHECK1-NEXT:    call void @__kmpc_copyprivate(ptr @[[GLOB1]], i32 [[TMP4]], i64 24, ptr [[DOTOMP_COPYPRIVATE_CPR_LIST]], ptr @.omp.copyprivate.copy_func.7, i32 [[TMP18]])
 // CHECK1-NEXT:    ret void
-// CHECK1:       terminate.lpad:
-// CHECK1-NEXT:    [[TMP19:%.*]] = landingpad { ptr, i32 }
-// CHECK1-NEXT:            catch ptr null
-// CHECK1-NEXT:    [[TMP20:%.*]] = extractvalue { ptr, i32 } [[TMP19]], 0
-// CHECK1-NEXT:    call void @__clang_call_terminate(ptr [[TMP20]]) #[[ATTR11]]
-// CHECK1-NEXT:    unreachable
 //
 //
 // CHECK1-LABEL: define {{[^@]+}}@_ZZN2SSC1ERiENKUlvE_clEv
@@ -843,7 +812,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK1-LABEL: define {{[^@]+}}@.omp.copyprivate.copy_func.7
-// CHECK1-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR8]] {
+// CHECK1-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR7]] {
 // CHECK1-NEXT:  entry:
 // CHECK1-NEXT:    [[DOTADDR:%.*]] = alloca ptr, align 8
 // CHECK1-NEXT:    [[DOTADDR1:%.*]] = alloca ptr, align 8
@@ -873,7 +842,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK1-LABEL: define {{[^@]+}}@_ZZN2SSC1ERiENKUlvE_clEv.omp_outlined
-// CHECK1-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]], i64 noundef [[B:%.*]], i64 noundef [[C:%.*]]) #[[ATTR10]] {
+// CHECK1-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]], i64 noundef [[B:%.*]], i64 noundef [[C:%.*]]) #[[ATTR9]] {
 // CHECK1-NEXT:  entry:
 // CHECK1-NEXT:    [[DOTGLOBAL_TID__ADDR:%.*]] = alloca ptr, align 8
 // CHECK1-NEXT:    [[DOTBOUND_TID__ADDR:%.*]] = alloca ptr, align 8
@@ -936,7 +905,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK1-LABEL: define {{[^@]+}}@.omp.copyprivate.copy_func.8
-// CHECK1-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR8]] {
+// CHECK1-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR7]] {
 // CHECK1-NEXT:  entry:
 // CHECK1-NEXT:    [[DOTADDR:%.*]] = alloca ptr, align 8
 // CHECK1-NEXT:    [[DOTADDR1:%.*]] = alloca ptr, align 8
@@ -973,7 +942,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK1-LABEL: define {{[^@]+}}@_Z15parallel_singlev.omp_outlined
-// CHECK1-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]]) #[[ATTR10]] personality ptr @__gxx_personality_v0 {
+// CHECK1-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]]) #[[ATTR9]] personality ptr @__gxx_personality_v0 {
 // CHECK1-NEXT:  entry:
 // CHECK1-NEXT:    [[DOTGLOBAL_TID__ADDR:%.*]] = alloca ptr, align 8
 // CHECK1-NEXT:    [[DOTBOUND_TID__ADDR:%.*]] = alloca ptr, align 8
@@ -985,20 +954,12 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK1-NEXT:    [[TMP3:%.*]] = icmp ne i32 [[TMP2]], 0
 // CHECK1-NEXT:    br i1 [[TMP3]], label [[OMP_IF_THEN:%.*]], label [[OMP_IF_END:%.*]]
 // CHECK1:       omp_if.then:
-// CHECK1-NEXT:    invoke void @_Z3foov()
-// CHECK1-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]]
-// CHECK1:       invoke.cont:
+// CHECK1-NEXT:    call unwindabort void @_Z3foov()
 // CHECK1-NEXT:    call void @__kmpc_end_single(ptr @[[GLOB1]], i32 [[TMP1]])
 // CHECK1-NEXT:    br label [[OMP_IF_END]]
 // CHECK1:       omp_if.end:
 // CHECK1-NEXT:    call void @__kmpc_barrier(ptr @[[GLOB2]], i32 [[TMP1]])
 // CHECK1-NEXT:    ret void
-// CHECK1:       terminate.lpad:
-// CHECK1-NEXT:    [[TMP4:%.*]] = landingpad { ptr, i32 }
-// CHECK1-NEXT:            catch ptr null
-// CHECK1-NEXT:    [[TMP5:%.*]] = extractvalue { ptr, i32 } [[TMP4]], 0
-// CHECK1-NEXT:    call void @__clang_call_terminate(ptr [[TMP5]]) #[[ATTR11]]
-// CHECK1-NEXT:    unreachable
 //
 //
 // CHECK1-LABEL: define {{[^@]+}}@_GLOBAL__sub_I_single_codegen.cpp
@@ -1264,9 +1225,7 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK2-NEXT:    [[TMP6:%.*]] = icmp ne i32 [[TMP5]], 0
 // CHECK2-NEXT:    br i1 [[TMP6]], label [[OMP_IF_THEN3:%.*]], label [[OMP_IF_END4:%.*]]
 // CHECK2:       omp_if.then3:
-// CHECK2-NEXT:    invoke void @_Z3foov()
-// CHECK2-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]]
-// CHECK2:       invoke.cont:
+// CHECK2-NEXT:    call unwindabort void @_Z3foov()
 // CHECK2-NEXT:    call void @__kmpc_end_single(ptr @[[GLOB1]], i32 [[TMP0]])
 // CHECK2-NEXT:    store i32 1, ptr [[DOTOMP_COPYPRIVATE_DID_IT]], align 4
 // CHECK2-NEXT:    br label [[OMP_IF_END4]]
@@ -1288,12 +1247,6 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK2-NEXT:    [[TMP15:%.*]] = load i8, ptr [[A]], align 1
 // CHECK2-NEXT:    [[CONV:%.*]] = sext i8 [[TMP15]] to i32
 // CHECK2-NEXT:    ret i32 [[CONV]]
-// CHECK2:       terminate.lpad:
-// CHECK2-NEXT:    [[TMP16:%.*]] = landingpad { ptr, i32 }
-// CHECK2-NEXT:            catch ptr null
-// CHECK2-NEXT:    [[TMP17:%.*]] = extractvalue { ptr, i32 } [[TMP16]], 0
-// CHECK2-NEXT:    call void @__clang_call_terminate(ptr [[TMP17]]) #[[ATTR11:[0-9]+]]
-// CHECK2-NEXT:    unreachable
 //
 //
 // CHECK2-LABEL: define {{[^@]+}}@_ZN3SSTIdEC1Ev
@@ -1319,15 +1272,8 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK2-NEXT:    ret void
 //
 //
-// CHECK2-LABEL: define {{[^@]+}}@__clang_call_terminate
-// CHECK2-SAME: (ptr noundef [[TMP0:%.*]]) #[[ATTR7:[0-9]+]] comdat {
-// CHECK2-NEXT:    [[TMP2:%.*]] = call ptr @__cxa_begin_catch(ptr [[TMP0]]) #[[ATTR3]]
-// CHECK2-NEXT:    call void @_ZSt9terminatev() #[[ATTR11]]
-// CHECK2-NEXT:    unreachable
-//
-//
 // CHECK2-LABEL: define {{[^@]+}}@.omp.copyprivate.copy_func
-// CHECK2-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR8:[0-9]+]] {
+// CHECK2-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR7:[0-9]+]] {
 // CHECK2-NEXT:  entry:
 // CHECK2-NEXT:    [[DOTADDR:%.*]] = alloca ptr, align 8
 // CHECK2-NEXT:    [[DOTADDR1:%.*]] = alloca ptr, align 8
@@ -1407,7 +1353,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK2-LABEL: define {{[^@]+}}@_ZN3SSTIdEC2Ev.omp_outlined
-// CHECK2-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]]) #[[ATTR10:[0-9]+]] personality ptr @__gxx_personality_v0 {
+// CHECK2-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]]) #[[ATTR9:[0-9]+]] personality ptr @__gxx_personality_v0 {
 // CHECK2-NEXT:  entry:
 // CHECK2-NEXT:    [[DOTGLOBAL_TID__ADDR:%.*]] = alloca ptr, align 8
 // CHECK2-NEXT:    [[DOTBOUND_TID__ADDR:%.*]] = alloca ptr, align 8
@@ -1438,9 +1384,7 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK2-NEXT:    [[TMP7:%.*]] = getelementptr inbounds nuw [[CLASS_ANON]], ptr [[REF_TMP]], i32 0, i32 1
 // CHECK2-NEXT:    [[TMP8:%.*]] = load ptr, ptr [[_TMP1]], align 8, !nonnull [[META2]], !align [[META3]]
 // CHECK2-NEXT:    store ptr [[TMP8]], ptr [[TMP7]], align 8
-// CHECK2-NEXT:    invoke void @_ZZN3SSTIdEC1EvENKUlvE_clEv(ptr noundef nonnull align 8 dereferenceable(16) [[REF_TMP]])
-// CHECK2-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]]
-// CHECK2:       invoke.cont:
+// CHECK2-NEXT:    call unwindabort void @_ZZN3SSTIdEC1EvENKUlvE_clEv(ptr noundef nonnull align 8 dereferenceable(16) [[REF_TMP]])
 // CHECK2-NEXT:    call void @__kmpc_end_single(ptr @[[GLOB1]], i32 [[TMP3]])
 // CHECK2-NEXT:    store i32 1, ptr [[DOTOMP_COPYPRIVATE_DID_IT]], align 4
 // CHECK2-NEXT:    br label [[OMP_IF_END]]
@@ -1451,12 +1395,6 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK2-NEXT:    [[TMP11:%.*]] = load i32, ptr [[DOTOMP_COPYPRIVATE_DID_IT]], align 4
 // CHECK2-NEXT:    call void @__kmpc_copyprivate(ptr @[[GLOB1]], i32 [[TMP3]], i64 8, ptr [[DOTOMP_COPYPRIVATE_CPR_LIST]], ptr @.omp.copyprivate.copy_func.5, i32 [[TMP11]])
 // CHECK2-NEXT:    ret void
-// CHECK2:       terminate.lpad:
-// CHECK2-NEXT:    [[TMP12:%.*]] = landingpad { ptr, i32 }
-// CHECK2-NEXT:            catch ptr null
-// CHECK2-NEXT:    [[TMP13:%.*]] = extractvalue { ptr, i32 } [[TMP12]], 0
-// CHECK2-NEXT:    call void @__clang_call_terminate(ptr [[TMP13]]) #[[ATTR11]]
-// CHECK2-NEXT:    unreachable
 //
 //
 // CHECK2-LABEL: define {{[^@]+}}@_ZZN3SSTIdEC1EvENKUlvE_clEv
@@ -1479,7 +1417,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK2-LABEL: define {{[^@]+}}@.omp.copyprivate.copy_func.5
-// CHECK2-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR8]] {
+// CHECK2-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR7]] {
 // CHECK2-NEXT:  entry:
 // CHECK2-NEXT:    [[DOTADDR:%.*]] = alloca ptr, align 8
 // CHECK2-NEXT:    [[DOTADDR1:%.*]] = alloca ptr, align 8
@@ -1520,7 +1458,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK2-LABEL: define {{[^@]+}}@_ZZZN3SSTIdEC1EvENKUlvE_clEvENKUlvE_clEv.omp_outlined
-// CHECK2-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]]) #[[ATTR10]] {
+// CHECK2-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]]) #[[ATTR9]] {
 // CHECK2-NEXT:  entry:
 // CHECK2-NEXT:    [[DOTGLOBAL_TID__ADDR:%.*]] = alloca ptr, align 8
 // CHECK2-NEXT:    [[DOTBOUND_TID__ADDR:%.*]] = alloca ptr, align 8
@@ -1562,7 +1500,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK2-LABEL: define {{[^@]+}}@.omp.copyprivate.copy_func.6
-// CHECK2-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR8]] {
+// CHECK2-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR7]] {
 // CHECK2-NEXT:  entry:
 // CHECK2-NEXT:    [[DOTADDR:%.*]] = alloca ptr, align 8
 // CHECK2-NEXT:    [[DOTADDR1:%.*]] = alloca ptr, align 8
@@ -1630,7 +1568,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK2-LABEL: define {{[^@]+}}@_ZN2SSC2ERi.omp_outlined
-// CHECK2-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]], i64 noundef [[B:%.*]], i64 noundef [[C:%.*]]) #[[ATTR10]] personality ptr @__gxx_personality_v0 {
+// CHECK2-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]], i64 noundef [[B:%.*]], i64 noundef [[C:%.*]]) #[[ATTR9]] personality ptr @__gxx_personality_v0 {
 // CHECK2-NEXT:  entry:
 // CHECK2-NEXT:    [[DOTGLOBAL_TID__ADDR:%.*]] = alloca ptr, align 8
 // CHECK2-NEXT:    [[DOTBOUND_TID__ADDR:%.*]] = alloca ptr, align 8
@@ -1675,9 +1613,7 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK2-NEXT:    [[TMP11:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_1]], ptr [[REF_TMP]], i32 0, i32 3
 // CHECK2-NEXT:    [[TMP12:%.*]] = load ptr, ptr [[_TMP3]], align 8, !nonnull [[META2]], !align [[META6]]
 // CHECK2-NEXT:    store ptr [[TMP12]], ptr [[TMP11]], align 8
-// CHECK2-NEXT:    invoke void @_ZZN2SSC1ERiENKUlvE_clEv(ptr noundef nonnull align 8 dereferenceable(32) [[REF_TMP]])
-// CHECK2-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]]
-// CHECK2:       invoke.cont:
+// CHECK2-NEXT:    call unwindabort void @_ZZN2SSC1ERiENKUlvE_clEv(ptr noundef nonnull align 8 dereferenceable(32) [[REF_TMP]])
 // CHECK2-NEXT:    call void @__kmpc_end_single(ptr @[[GLOB1]], i32 [[TMP4]])
 // CHECK2-NEXT:    store i32 1, ptr [[DOTOMP_COPYPRIVATE_DID_IT]], align 4
 // CHECK2-NEXT:    br label [[OMP_IF_END]]
@@ -1693,12 +1629,6 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK2-NEXT:    [[TMP18:%.*]] = load i32, ptr [[DOTOMP_COPYPRIVATE_DID_IT]], align 4
 // CHECK2-NEXT:    call void @__kmpc_copyprivate(ptr @[[GLOB1]], i32 [[TMP4]], i64 24, ptr [[DOTOMP_COPYPRIVATE_CPR_LIST]], ptr @.omp.copyprivate.copy_func.7, i32 [[TMP18]])
 // CHECK2-NEXT:    ret void
-// CHECK2:       terminate.lpad:
-// CHECK2-NEXT:    [[TMP19:%.*]] = landingpad { ptr, i32 }
-// CHECK2-NEXT:            catch ptr null
-// CHECK2-NEXT:    [[TMP20:%.*]] = extractvalue { ptr, i32 } [[TMP19]], 0
-// CHECK2-NEXT:    call void @__clang_call_terminate(ptr [[TMP20]]) #[[ATTR11]]
-// CHECK2-NEXT:    unreachable
 //
 //
 // CHECK2-LABEL: define {{[^@]+}}@_ZZN2SSC1ERiENKUlvE_clEv
@@ -1747,7 +1677,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK2-LABEL: define {{[^@]+}}@.omp.copyprivate.copy_func.7
-// CHECK2-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR8]] {
+// CHECK2-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR7]] {
 // CHECK2-NEXT:  entry:
 // CHECK2-NEXT:    [[DOTADDR:%.*]] = alloca ptr, align 8
 // CHECK2-NEXT:    [[DOTADDR1:%.*]] = alloca ptr, align 8
@@ -1777,7 +1707,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK2-LABEL: define {{[^@]+}}@_ZZN2SSC1ERiENKUlvE_clEv.omp_outlined
-// CHECK2-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]], i64 noundef [[B:%.*]], i64 noundef [[C:%.*]]) #[[ATTR10]] {
+// CHECK2-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]], i64 noundef [[B:%.*]], i64 noundef [[C:%.*]]) #[[ATTR9]] {
 // CHECK2-NEXT:  entry:
 // CHECK2-NEXT:    [[DOTGLOBAL_TID__ADDR:%.*]] = alloca ptr, align 8
 // CHECK2-NEXT:    [[DOTBOUND_TID__ADDR:%.*]] = alloca ptr, align 8
@@ -1840,7 +1770,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK2-LABEL: define {{[^@]+}}@.omp.copyprivate.copy_func.8
-// CHECK2-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR8]] {
+// CHECK2-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR7]] {
 // CHECK2-NEXT:  entry:
 // CHECK2-NEXT:    [[DOTADDR:%.*]] = alloca ptr, align 8
 // CHECK2-NEXT:    [[DOTADDR1:%.*]] = alloca ptr, align 8
@@ -1877,7 +1807,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK2-LABEL: define {{[^@]+}}@_Z15parallel_singlev.omp_outlined
-// CHECK2-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]]) #[[ATTR10]] personality ptr @__gxx_personality_v0 {
+// CHECK2-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]]) #[[ATTR9]] personality ptr @__gxx_personality_v0 {
 // CHECK2-NEXT:  entry:
 // CHECK2-NEXT:    [[DOTGLOBAL_TID__ADDR:%.*]] = alloca ptr, align 8
 // CHECK2-NEXT:    [[DOTBOUND_TID__ADDR:%.*]] = alloca ptr, align 8
@@ -1889,20 +1819,12 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK2-NEXT:    [[TMP3:%.*]] = icmp ne i32 [[TMP2]], 0
 // CHECK2-NEXT:    br i1 [[TMP3]], label [[OMP_IF_THEN:%.*]], label [[OMP_IF_END:%.*]]
 // CHECK2:       omp_if.then:
-// CHECK2-NEXT:    invoke void @_Z3foov()
-// CHECK2-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]]
-// CHECK2:       invoke.cont:
+// CHECK2-NEXT:    call unwindabort void @_Z3foov()
 // CHECK2-NEXT:    call void @__kmpc_end_single(ptr @[[GLOB1]], i32 [[TMP1]])
 // CHECK2-NEXT:    br label [[OMP_IF_END]]
 // CHECK2:       omp_if.end:
 // CHECK2-NEXT:    call void @__kmpc_barrier(ptr @[[GLOB2]], i32 [[TMP1]])
 // CHECK2-NEXT:    ret void
-// CHECK2:       terminate.lpad:
-// CHECK2-NEXT:    [[TMP4:%.*]] = landingpad { ptr, i32 }
-// CHECK2-NEXT:            catch ptr null
-// CHECK2-NEXT:    [[TMP5:%.*]] = extractvalue { ptr, i32 } [[TMP4]], 0
-// CHECK2-NEXT:    call void @__clang_call_terminate(ptr [[TMP5]]) #[[ATTR11]]
-// CHECK2-NEXT:    unreachable
 //
 //
 // CHECK2-LABEL: define {{[^@]+}}@_GLOBAL__sub_I_single_codegen.cpp
@@ -2156,9 +2078,7 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK4-NEXT:    [[TMP6:%.*]] = icmp ne i32 [[TMP5]], 0
 // CHECK4-NEXT:    br i1 [[TMP6]], label [[OMP_IF_THEN3:%.*]], label [[OMP_IF_END4:%.*]]
 // CHECK4:       omp_if.then3:
-// CHECK4-NEXT:    invoke void @_Z3foov()
-// CHECK4-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]]
-// CHECK4:       invoke.cont:
+// CHECK4-NEXT:    call unwindabort void @_Z3foov()
 // CHECK4-NEXT:    call void @__kmpc_end_single(ptr @[[GLOB1]], i32 [[TMP0]])
 // CHECK4-NEXT:    store i32 1, ptr [[DOTOMP_COPYPRIVATE_DID_IT]], align 4
 // CHECK4-NEXT:    br label [[OMP_IF_END4]]
@@ -2180,12 +2100,6 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK4-NEXT:    [[TMP15:%.*]] = load i8, ptr [[A]], align 1
 // CHECK4-NEXT:    [[CONV:%.*]] = sext i8 [[TMP15]] to i32
 // CHECK4-NEXT:    ret i32 [[CONV]]
-// CHECK4:       terminate.lpad:
-// CHECK4-NEXT:    [[TMP16:%.*]] = landingpad { ptr, i32 }
-// CHECK4-NEXT:            catch ptr null
-// CHECK4-NEXT:    [[TMP17:%.*]] = extractvalue { ptr, i32 } [[TMP16]], 0
-// CHECK4-NEXT:    call void @__clang_call_terminate(ptr [[TMP17]]) #[[ATTR11:[0-9]+]]
-// CHECK4-NEXT:    unreachable
 //
 //
 // CHECK4-LABEL: define {{[^@]+}}@_ZN3SSTIdEC1Ev
@@ -2211,15 +2125,8 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK4-NEXT:    ret void
 //
 //
-// CHECK4-LABEL: define {{[^@]+}}@__clang_call_terminate
-// CHECK4-SAME: (ptr noundef [[TMP0:%.*]]) #[[ATTR7:[0-9]+]] comdat {
-// CHECK4-NEXT:    [[TMP2:%.*]] = call ptr @__cxa_begin_catch(ptr [[TMP0]]) #[[ATTR3]]
-// CHECK4-NEXT:    call void @_ZSt9terminatev() #[[ATTR11]]
-// CHECK4-NEXT:    unreachable
-//
-//
 // CHECK4-LABEL: define {{[^@]+}}@.omp.copyprivate.copy_func
-// CHECK4-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR8:[0-9]+]] {
+// CHECK4-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR7:[0-9]+]] {
 // CHECK4-NEXT:  entry:
 // CHECK4-NEXT:    [[DOTADDR:%.*]] = alloca ptr, align 8
 // CHECK4-NEXT:    [[DOTADDR1:%.*]] = alloca ptr, align 8
@@ -2299,7 +2206,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK4-LABEL: define {{[^@]+}}@_ZN3SSTIdEC2Ev.omp_outlined
-// CHECK4-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]]) #[[ATTR10:[0-9]+]] personality ptr @__gxx_personality_v0 {
+// CHECK4-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]]) #[[ATTR9:[0-9]+]] personality ptr @__gxx_personality_v0 {
 // CHECK4-NEXT:  entry:
 // CHECK4-NEXT:    [[DOTGLOBAL_TID__ADDR:%.*]] = alloca ptr, align 8
 // CHECK4-NEXT:    [[DOTBOUND_TID__ADDR:%.*]] = alloca ptr, align 8
@@ -2330,9 +2237,7 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK4-NEXT:    [[TMP7:%.*]] = getelementptr inbounds nuw [[CLASS_ANON]], ptr [[REF_TMP]], i32 0, i32 1
 // CHECK4-NEXT:    [[TMP8:%.*]] = load ptr, ptr [[_TMP1]], align 8, !nonnull [[META2]], !align [[META3]]
 // CHECK4-NEXT:    store ptr [[TMP8]], ptr [[TMP7]], align 8
-// CHECK4-NEXT:    invoke void @_ZZN3SSTIdEC1EvENKUlvE_clEv(ptr noundef nonnull align 8 dereferenceable(16) [[REF_TMP]])
-// CHECK4-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]]
-// CHECK4:       invoke.cont:
+// CHECK4-NEXT:    call unwindabort void @_ZZN3SSTIdEC1EvENKUlvE_clEv(ptr noundef nonnull align 8 dereferenceable(16) [[REF_TMP]])
 // CHECK4-NEXT:    call void @__kmpc_end_single(ptr @[[GLOB1]], i32 [[TMP3]])
 // CHECK4-NEXT:    store i32 1, ptr [[DOTOMP_COPYPRIVATE_DID_IT]], align 4
 // CHECK4-NEXT:    br label [[OMP_IF_END]]
@@ -2343,12 +2248,6 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK4-NEXT:    [[TMP11:%.*]] = load i32, ptr [[DOTOMP_COPYPRIVATE_DID_IT]], align 4
 // CHECK4-NEXT:    call void @__kmpc_copyprivate(ptr @[[GLOB1]], i32 [[TMP3]], i64 8, ptr [[DOTOMP_COPYPRIVATE_CPR_LIST]], ptr @.omp.copyprivate.copy_func.4, i32 [[TMP11]])
 // CHECK4-NEXT:    ret void
-// CHECK4:       terminate.lpad:
-// CHECK4-NEXT:    [[TMP12:%.*]] = landingpad { ptr, i32 }
-// CHECK4-NEXT:            catch ptr null
-// CHECK4-NEXT:    [[TMP13:%.*]] = extractvalue { ptr, i32 } [[TMP12]], 0
-// CHECK4-NEXT:    call void @__clang_call_terminate(ptr [[TMP13]]) #[[ATTR11]]
-// CHECK4-NEXT:    unreachable
 //
 //
 // CHECK4-LABEL: define {{[^@]+}}@_ZZN3SSTIdEC1EvENKUlvE_clEv
@@ -2371,7 +2270,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK4-LABEL: define {{[^@]+}}@.omp.copyprivate.copy_func.4
-// CHECK4-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR8]] {
+// CHECK4-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR7]] {
 // CHECK4-NEXT:  entry:
 // CHECK4-NEXT:    [[DOTADDR:%.*]] = alloca ptr, align 8
 // CHECK4-NEXT:    [[DOTADDR1:%.*]] = alloca ptr, align 8
@@ -2412,7 +2311,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK4-LABEL: define {{[^@]+}}@_ZZZN3SSTIdEC1EvENKUlvE_clEvENKUlvE_clEv.omp_outlined
-// CHECK4-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]]) #[[ATTR10]] {
+// CHECK4-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]]) #[[ATTR9]] {
 // CHECK4-NEXT:  entry:
 // CHECK4-NEXT:    [[DOTGLOBAL_TID__ADDR:%.*]] = alloca ptr, align 8
 // CHECK4-NEXT:    [[DOTBOUND_TID__ADDR:%.*]] = alloca ptr, align 8
@@ -2454,7 +2353,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK4-LABEL: define {{[^@]+}}@.omp.copyprivate.copy_func.5
-// CHECK4-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR8]] {
+// CHECK4-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR7]] {
 // CHECK4-NEXT:  entry:
 // CHECK4-NEXT:    [[DOTADDR:%.*]] = alloca ptr, align 8
 // CHECK4-NEXT:    [[DOTADDR1:%.*]] = alloca ptr, align 8
@@ -2522,7 +2421,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK4-LABEL: define {{[^@]+}}@_ZN2SSC2ERi.omp_outlined
-// CHECK4-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]], i64 noundef [[B:%.*]], i64 noundef [[C:%.*]]) #[[ATTR10]] personality ptr @__gxx_personality_v0 {
+// CHECK4-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]], i64 noundef [[B:%.*]], i64 noundef [[C:%.*]]) #[[ATTR9]] personality ptr @__gxx_personality_v0 {
 // CHECK4-NEXT:  entry:
 // CHECK4-NEXT:    [[DOTGLOBAL_TID__ADDR:%.*]] = alloca ptr, align 8
 // CHECK4-NEXT:    [[DOTBOUND_TID__ADDR:%.*]] = alloca ptr, align 8
@@ -2567,9 +2466,7 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK4-NEXT:    [[TMP11:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_1]], ptr [[REF_TMP]], i32 0, i32 3
 // CHECK4-NEXT:    [[TMP12:%.*]] = load ptr, ptr [[_TMP3]], align 8, !nonnull [[META2]], !align [[META6]]
 // CHECK4-NEXT:    store ptr [[TMP12]], ptr [[TMP11]], align 8
-// CHECK4-NEXT:    invoke void @_ZZN2SSC1ERiENKUlvE_clEv(ptr noundef nonnull align 8 dereferenceable(32) [[REF_TMP]])
-// CHECK4-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]]
-// CHECK4:       invoke.cont:
+// CHECK4-NEXT:    call unwindabort void @_ZZN2SSC1ERiENKUlvE_clEv(ptr noundef nonnull align 8 dereferenceable(32) [[REF_TMP]])
 // CHECK4-NEXT:    call void @__kmpc_end_single(ptr @[[GLOB1]], i32 [[TMP4]])
 // CHECK4-NEXT:    store i32 1, ptr [[DOTOMP_COPYPRIVATE_DID_IT]], align 4
 // CHECK4-NEXT:    br label [[OMP_IF_END]]
@@ -2585,12 +2482,6 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK4-NEXT:    [[TMP18:%.*]] = load i32, ptr [[DOTOMP_COPYPRIVATE_DID_IT]], align 4
 // CHECK4-NEXT:    call void @__kmpc_copyprivate(ptr @[[GLOB1]], i32 [[TMP4]], i64 24, ptr [[DOTOMP_COPYPRIVATE_CPR_LIST]], ptr @.omp.copyprivate.copy_func.6, i32 [[TMP18]])
 // CHECK4-NEXT:    ret void
-// CHECK4:       terminate.lpad:
-// CHECK4-NEXT:    [[TMP19:%.*]] = landingpad { ptr, i32 }
-// CHECK4-NEXT:            catch ptr null
-// CHECK4-NEXT:    [[TMP20:%.*]] = extractvalue { ptr, i32 } [[TMP19]], 0
-// CHECK4-NEXT:    call void @__clang_call_terminate(ptr [[TMP20]]) #[[ATTR11]]
-// CHECK4-NEXT:    unreachable
 //
 //
 // CHECK4-LABEL: define {{[^@]+}}@_ZZN2SSC1ERiENKUlvE_clEv
@@ -2639,7 +2530,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK4-LABEL: define {{[^@]+}}@.omp.copyprivate.copy_func.6
-// CHECK4-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR8]] {
+// CHECK4-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR7]] {
 // CHECK4-NEXT:  entry:
 // CHECK4-NEXT:    [[DOTADDR:%.*]] = alloca ptr, align 8
 // CHECK4-NEXT:    [[DOTADDR1:%.*]] = alloca ptr, align 8
@@ -2669,7 +2560,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK4-LABEL: define {{[^@]+}}@_ZZN2SSC1ERiENKUlvE_clEv.omp_outlined
-// CHECK4-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]], i64 noundef [[B:%.*]], i64 noundef [[C:%.*]]) #[[ATTR10]] {
+// CHECK4-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]], i64 noundef [[B:%.*]], i64 noundef [[C:%.*]]) #[[ATTR9]] {
 // CHECK4-NEXT:  entry:
 // CHECK4-NEXT:    [[DOTGLOBAL_TID__ADDR:%.*]] = alloca ptr, align 8
 // CHECK4-NEXT:    [[DOTBOUND_TID__ADDR:%.*]] = alloca ptr, align 8
@@ -2732,7 +2623,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK4-LABEL: define {{[^@]+}}@.omp.copyprivate.copy_func.7
-// CHECK4-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR8]] {
+// CHECK4-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR7]] {
 // CHECK4-NEXT:  entry:
 // CHECK4-NEXT:    [[DOTADDR:%.*]] = alloca ptr, align 8
 // CHECK4-NEXT:    [[DOTADDR1:%.*]] = alloca ptr, align 8
@@ -2769,7 +2660,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK4-LABEL: define {{[^@]+}}@_Z15parallel_singlev.omp_outlined
-// CHECK4-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]]) #[[ATTR10]] personality ptr @__gxx_personality_v0 {
+// CHECK4-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]]) #[[ATTR9]] personality ptr @__gxx_personality_v0 {
 // CHECK4-NEXT:  entry:
 // CHECK4-NEXT:    [[DOTGLOBAL_TID__ADDR:%.*]] = alloca ptr, align 8
 // CHECK4-NEXT:    [[DOTBOUND_TID__ADDR:%.*]] = alloca ptr, align 8
@@ -2781,20 +2672,12 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK4-NEXT:    [[TMP3:%.*]] = icmp ne i32 [[TMP2]], 0
 // CHECK4-NEXT:    br i1 [[TMP3]], label [[OMP_IF_THEN:%.*]], label [[OMP_IF_END:%.*]]
 // CHECK4:       omp_if.then:
-// CHECK4-NEXT:    invoke void @_Z3foov()
-// CHECK4-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]]
-// CHECK4:       invoke.cont:
+// CHECK4-NEXT:    call unwindabort void @_Z3foov()
 // CHECK4-NEXT:    call void @__kmpc_end_single(ptr @[[GLOB1]], i32 [[TMP1]])
 // CHECK4-NEXT:    br label [[OMP_IF_END]]
 // CHECK4:       omp_if.end:
 // CHECK4-NEXT:    call void @__kmpc_barrier(ptr @[[GLOB2]], i32 [[TMP1]])
 // CHECK4-NEXT:    ret void
-// CHECK4:       terminate.lpad:
-// CHECK4-NEXT:    [[TMP4:%.*]] = landingpad { ptr, i32 }
-// CHECK4-NEXT:            catch ptr null
-// CHECK4-NEXT:    [[TMP5:%.*]] = extractvalue { ptr, i32 } [[TMP4]], 0
-// CHECK4-NEXT:    call void @__clang_call_terminate(ptr [[TMP5]]) #[[ATTR11]]
-// CHECK4-NEXT:    unreachable
 //
 //
 // CHECK4-LABEL: define {{[^@]+}}@_GLOBAL__sub_I_single_codegen.cpp
@@ -3058,9 +2941,7 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK5-NEXT:    [[TMP6:%.*]] = icmp ne i32 [[TMP5]], 0, !dbg [[DBG61]]
 // CHECK5-NEXT:    br i1 [[TMP6]], label [[OMP_IF_THEN3:%.*]], label [[OMP_IF_END4:%.*]], !dbg [[DBG61]]
 // CHECK5:       omp_if.then3:
-// CHECK5-NEXT:    invoke void @_Z3foov()
-// CHECK5-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !dbg [[DBG62:![0-9]+]]
-// CHECK5:       invoke.cont:
+// CHECK5-NEXT:    call unwindabort void @_Z3foov(), !dbg [[DBG62:![0-9]+]]
 // CHECK5-NEXT:    call void @__kmpc_end_single(ptr @[[GLOB10]], i32 [[TMP0]]), !dbg [[DBG62]]
 // CHECK5-NEXT:    store i32 1, ptr [[DOTOMP_COPYPRIVATE_DID_IT]], align 4, !dbg [[DBG62]]
 // CHECK5-NEXT:    br label [[OMP_IF_END4]], !dbg [[DBG62]]
@@ -3082,12 +2963,6 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK5-NEXT:    [[TMP15:%.*]] = load i8, ptr [[A]], align 1, !dbg [[DBG65:![0-9]+]]
 // CHECK5-NEXT:    [[CONV:%.*]] = sext i8 [[TMP15]] to i32, !dbg [[DBG65]]
 // CHECK5-NEXT:    ret i32 [[CONV]], !dbg [[DBG66:![0-9]+]]
-// CHECK5:       terminate.lpad:
-// CHECK5-NEXT:    [[TMP16:%.*]] = landingpad { ptr, i32 }
-// CHECK5-NEXT:            catch ptr null, !dbg [[DBG62]]
-// CHECK5-NEXT:    [[TMP17:%.*]] = extractvalue { ptr, i32 } [[TMP16]], 0, !dbg [[DBG62]]
-// CHECK5-NEXT:    call void @__clang_call_terminate(ptr [[TMP17]]) #[[ATTR11:[0-9]+]], !dbg [[DBG62]]
-// CHECK5-NEXT:    unreachable, !dbg [[DBG62]]
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@_ZN3SSTIdEC1Ev
@@ -3113,15 +2988,8 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK5-NEXT:    ret void, !dbg [[DBG72:![0-9]+]]
 //
 //
-// CHECK5-LABEL: define {{[^@]+}}@__clang_call_terminate
-// CHECK5-SAME: (ptr noundef [[TMP0:%.*]]) #[[ATTR7:[0-9]+]] {
-// CHECK5-NEXT:    [[TMP2:%.*]] = call ptr @__cxa_begin_catch(ptr [[TMP0]]) #[[ATTR3]]
-// CHECK5-NEXT:    call void @_ZSt9terminatev() #[[ATTR11]]
-// CHECK5-NEXT:    unreachable
-//
-//
 // CHECK5-LABEL: define {{[^@]+}}@.omp.copyprivate.copy_func
-// CHECK5-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR8:[0-9]+]] !dbg [[DBG73:![0-9]+]] {
+// CHECK5-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR7:[0-9]+]] !dbg [[DBG73:![0-9]+]] {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[DOTADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    [[DOTADDR1:%.*]] = alloca ptr, align 8
@@ -3201,7 +3069,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@_ZN3SSTIdEC2Ev.omp_outlined
-// CHECK5-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]]) #[[ATTR10:[0-9]+]] personality ptr @__gxx_personality_v0 !dbg [[DBG88:![0-9]+]] {
+// CHECK5-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]]) #[[ATTR9:[0-9]+]] personality ptr @__gxx_personality_v0 !dbg [[DBG88:![0-9]+]] {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[DOTGLOBAL_TID__ADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    [[DOTBOUND_TID__ADDR:%.*]] = alloca ptr, align 8
@@ -3232,9 +3100,7 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK5-NEXT:    [[TMP7:%.*]] = getelementptr inbounds nuw [[CLASS_ANON]], ptr [[REF_TMP]], i32 0, i32 1, !dbg [[DBG92]]
 // CHECK5-NEXT:    [[TMP8:%.*]] = load ptr, ptr [[_TMP1]], align 8, !dbg [[DBG93:![0-9]+]], !nonnull [[META8]], !align [[META85]]
 // CHECK5-NEXT:    store ptr [[TMP8]], ptr [[TMP7]], align 8, !dbg [[DBG92]]
-// CHECK5-NEXT:    invoke void @_ZZN3SSTIdEC1EvENKUlvE_clEv(ptr noundef nonnull align 8 dereferenceable(16) [[REF_TMP]])
-// CHECK5-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !dbg [[DBG92]]
-// CHECK5:       invoke.cont:
+// CHECK5-NEXT:    call unwindabort void @_ZZN3SSTIdEC1EvENKUlvE_clEv(ptr noundef nonnull align 8 dereferenceable(16) [[REF_TMP]]), !dbg [[DBG92]]
 // CHECK5-NEXT:    call void @__kmpc_end_single(ptr @[[GLOB16]], i32 [[TMP3]]), !dbg [[DBG92]]
 // CHECK5-NEXT:    store i32 1, ptr [[DOTOMP_COPYPRIVATE_DID_IT]], align 4, !dbg [[DBG92]]
 // CHECK5-NEXT:    br label [[OMP_IF_END]], !dbg [[DBG92]]
@@ -3245,12 +3111,6 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK5-NEXT:    [[TMP11:%.*]] = load i32, ptr [[DOTOMP_COPYPRIVATE_DID_IT]], align 4, !dbg [[DBG92]]
 // CHECK5-NEXT:    call void @__kmpc_copyprivate(ptr @[[GLOB16]], i32 [[TMP3]], i64 8, ptr [[DOTOMP_COPYPRIVATE_CPR_LIST]], ptr @.omp.copyprivate.copy_func.5, i32 [[TMP11]]), !dbg [[DBG92]]
 // CHECK5-NEXT:    ret void, !dbg [[DBG95:![0-9]+]]
-// CHECK5:       terminate.lpad:
-// CHECK5-NEXT:    [[TMP12:%.*]] = landingpad { ptr, i32 }
-// CHECK5-NEXT:            catch ptr null, !dbg [[DBG92]]
-// CHECK5-NEXT:    [[TMP13:%.*]] = extractvalue { ptr, i32 } [[TMP12]], 0, !dbg [[DBG92]]
-// CHECK5-NEXT:    call void @__clang_call_terminate(ptr [[TMP13]]) #[[ATTR11]], !dbg [[DBG92]]
-// CHECK5-NEXT:    unreachable, !dbg [[DBG92]]
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@_ZZN3SSTIdEC1EvENKUlvE_clEv
@@ -3273,7 +3133,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@.omp.copyprivate.copy_func.5
-// CHECK5-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR8]] !dbg [[DBG100:![0-9]+]] {
+// CHECK5-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR7]] !dbg [[DBG100:![0-9]+]] {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[DOTADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    [[DOTADDR1:%.*]] = alloca ptr, align 8
@@ -3314,7 +3174,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@_ZZZN3SSTIdEC1EvENKUlvE_clEvENKUlvE_clEv.omp_outlined
-// CHECK5-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]]) #[[ATTR10]] !dbg [[DBG111:![0-9]+]] {
+// CHECK5-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]]) #[[ATTR9]] !dbg [[DBG111:![0-9]+]] {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[DOTGLOBAL_TID__ADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    [[DOTBOUND_TID__ADDR:%.*]] = alloca ptr, align 8
@@ -3356,7 +3216,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@.omp.copyprivate.copy_func.6
-// CHECK5-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR8]] !dbg [[DBG118:![0-9]+]] {
+// CHECK5-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR7]] !dbg [[DBG118:![0-9]+]] {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[DOTADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    [[DOTADDR1:%.*]] = alloca ptr, align 8
@@ -3424,7 +3284,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@_ZN2SSC2ERi.omp_outlined
-// CHECK5-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]], i64 noundef [[B:%.*]], i64 noundef [[C:%.*]]) #[[ATTR10]] personality ptr @__gxx_personality_v0 !dbg [[DBG134:![0-9]+]] {
+// CHECK5-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]], i64 noundef [[B:%.*]], i64 noundef [[C:%.*]]) #[[ATTR9]] personality ptr @__gxx_personality_v0 !dbg [[DBG134:![0-9]+]] {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[DOTGLOBAL_TID__ADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    [[DOTBOUND_TID__ADDR:%.*]] = alloca ptr, align 8
@@ -3469,9 +3329,7 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK5-NEXT:    [[TMP11:%.*]] = getelementptr inbounds nuw [[CLASS_ANON_1]], ptr [[REF_TMP]], i32 0, i32 3, !dbg [[DBG139]]
 // CHECK5-NEXT:    [[TMP12:%.*]] = load ptr, ptr [[_TMP3]], align 8, !dbg [[DBG140]], !nonnull [[META8]], !align [[META126]]
 // CHECK5-NEXT:    store ptr [[TMP12]], ptr [[TMP11]], align 8, !dbg [[DBG139]]
-// CHECK5-NEXT:    invoke void @_ZZN2SSC1ERiENKUlvE_clEv(ptr noundef nonnull align 8 dereferenceable(32) [[REF_TMP]])
-// CHECK5-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !dbg [[DBG139]]
-// CHECK5:       invoke.cont:
+// CHECK5-NEXT:    call unwindabort void @_ZZN2SSC1ERiENKUlvE_clEv(ptr noundef nonnull align 8 dereferenceable(32) [[REF_TMP]]), !dbg [[DBG139]]
 // CHECK5-NEXT:    call void @__kmpc_end_single(ptr @[[GLOB24]], i32 [[TMP4]]), !dbg [[DBG139]]
 // CHECK5-NEXT:    store i32 1, ptr [[DOTOMP_COPYPRIVATE_DID_IT]], align 4, !dbg [[DBG139]]
 // CHECK5-NEXT:    br label [[OMP_IF_END]], !dbg [[DBG139]]
@@ -3487,12 +3345,6 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK5-NEXT:    [[TMP18:%.*]] = load i32, ptr [[DOTOMP_COPYPRIVATE_DID_IT]], align 4, !dbg [[DBG139]]
 // CHECK5-NEXT:    call void @__kmpc_copyprivate(ptr @[[GLOB24]], i32 [[TMP4]], i64 24, ptr [[DOTOMP_COPYPRIVATE_CPR_LIST]], ptr @.omp.copyprivate.copy_func.7, i32 [[TMP18]]), !dbg [[DBG139]]
 // CHECK5-NEXT:    ret void, !dbg [[DBG143:![0-9]+]]
-// CHECK5:       terminate.lpad:
-// CHECK5-NEXT:    [[TMP19:%.*]] = landingpad { ptr, i32 }
-// CHECK5-NEXT:            catch ptr null, !dbg [[DBG139]]
-// CHECK5-NEXT:    [[TMP20:%.*]] = extractvalue { ptr, i32 } [[TMP19]], 0, !dbg [[DBG139]]
-// CHECK5-NEXT:    call void @__clang_call_terminate(ptr [[TMP20]]) #[[ATTR11]], !dbg [[DBG139]]
-// CHECK5-NEXT:    unreachable, !dbg [[DBG139]]
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@_ZZN2SSC1ERiENKUlvE_clEv
@@ -3541,7 +3393,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@.omp.copyprivate.copy_func.7
-// CHECK5-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR8]] !dbg [[DBG156:![0-9]+]] {
+// CHECK5-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR7]] !dbg [[DBG156:![0-9]+]] {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[DOTADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    [[DOTADDR1:%.*]] = alloca ptr, align 8
@@ -3571,7 +3423,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@_ZZN2SSC1ERiENKUlvE_clEv.omp_outlined
-// CHECK5-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]], i64 noundef [[B:%.*]], i64 noundef [[C:%.*]]) #[[ATTR10]] !dbg [[DBG161:![0-9]+]] {
+// CHECK5-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]], ptr noundef [[THIS:%.*]], i64 noundef [[A:%.*]], i64 noundef [[B:%.*]], i64 noundef [[C:%.*]]) #[[ATTR9]] !dbg [[DBG161:![0-9]+]] {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[DOTGLOBAL_TID__ADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    [[DOTBOUND_TID__ADDR:%.*]] = alloca ptr, align 8
@@ -3634,7 +3486,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@.omp.copyprivate.copy_func.8
-// CHECK5-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR8]] !dbg [[DBG172:![0-9]+]] {
+// CHECK5-SAME: (ptr noundef [[TMP0:%.*]], ptr noundef [[TMP1:%.*]]) #[[ATTR7]] !dbg [[DBG172:![0-9]+]] {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[DOTADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    [[DOTADDR1:%.*]] = alloca ptr, align 8
@@ -3671,7 +3523,7 @@ void array_func(int n, int a[n], St s[2]) {
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@_Z15parallel_singlev.omp_outlined
-// CHECK5-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]]) #[[ATTR10]] personality ptr @__gxx_personality_v0 !dbg [[DBG180:![0-9]+]] {
+// CHECK5-SAME: (ptr noalias noundef [[DOTGLOBAL_TID_:%.*]], ptr noalias noundef [[DOTBOUND_TID_:%.*]]) #[[ATTR9]] personality ptr @__gxx_personality_v0 !dbg [[DBG180:![0-9]+]] {
 // CHECK5-NEXT:  entry:
 // CHECK5-NEXT:    [[DOTGLOBAL_TID__ADDR:%.*]] = alloca ptr, align 8
 // CHECK5-NEXT:    [[DOTBOUND_TID__ADDR:%.*]] = alloca ptr, align 8
@@ -3683,20 +3535,12 @@ void array_func(int n, int a[n], St s[2]) {
 // CHECK5-NEXT:    [[TMP3:%.*]] = icmp ne i32 [[TMP2]], 0, !dbg [[DBG181]]
 // CHECK5-NEXT:    br i1 [[TMP3]], label [[OMP_IF_THEN:%.*]], label [[OMP_IF_END:%.*]], !dbg [[DBG181]]
 // CHECK5:       omp_if.then:
-// CHECK5-NEXT:    invoke void @_Z3foov()
-// CHECK5-NEXT:            to label [[INVOKE_CONT:%.*]] unwind label [[TERMINATE_LPAD:%.*]], !dbg [[DBG182:![0-9]+]]
-// CHECK5:       invoke.cont:
+// CHECK5-NEXT:    call unwindabort void @_Z3foov(), !dbg [[DBG182:![0-9]+]]
 // CHECK5-NEXT:    call void @__kmpc_end_single(ptr @[[GLOB32]], i32 [[TMP1]]), !dbg [[DBG182]]
 // CHECK5-NEXT:    br label [[OMP_IF_END]], !dbg [[DBG182]]
 // CHECK5:       omp_if.end:
 // CHECK5-NEXT:    call void @__kmpc_barrier(ptr @[[GLOB33:[0-9]+]], i32 [[TMP1]]), !dbg [[DBG183:![0-9]+]]
 // CHECK5-NEXT:    ret void, !dbg [[DBG183]]
-// CHECK5:       terminate.lpad:
-// CHECK5-NEXT:    [[TMP4:%.*]] = landingpad { ptr, i32 }
-// CHECK5-NEXT:            catch ptr null, !dbg [[DBG182]]
-// CHECK5-NEXT:    [[TMP5:%.*]] = extractvalue { ptr, i32 } [[TMP4]], 0, !dbg [[DBG182]]
-// CHECK5-NEXT:    call void @__clang_call_terminate(ptr [[TMP5]]) #[[ATTR11]], !dbg [[DBG182]]
-// CHECK5-NEXT:    unreachable, !dbg [[DBG182]]
 //
 //
 // CHECK5-LABEL: define {{[^@]+}}@_GLOBAL__sub_I_single_codegen.cpp

@@ -127,6 +127,11 @@ bool EHScopeStack::containsOnlyNoopCleanups(
   return true;
 }
 
+bool EHScopeStack::inTerminateScope() const {
+  return InnermostEHScope != stable_end() &&
+         find(InnermostEHScope)->getKind() == EHScope::Terminate;
+}
+
 bool EHScopeStack::requiresLandingPad() const {
   for (stable_iterator si = getInnermostEHScope(); si != stable_end(); ) {
     // Skip lifetime markers.
@@ -166,8 +171,7 @@ void *EHScopeStack::pushCleanup(CleanupKind Kind, size_t Size) {
   // some, or all cleanups are called before std::terminate. Thus, when
   // terminate is the current EH scope, we may skip adding any EH cleanup
   // scopes.
-  if (InnermostEHScope != stable_end() &&
-      find(InnermostEHScope)->getKind() == EHScope::Terminate)
+  if (inTerminateScope())
     IsEHCleanup = false;
 
   EHCleanupScope *Scope =

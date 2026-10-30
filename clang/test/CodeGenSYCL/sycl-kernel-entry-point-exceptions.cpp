@@ -35,9 +35,9 @@ namespace ns1 {
 // CHECK: }
 
 
-// Validate that exception handling instructions are emitted when a
-// non-throwing sycl_kernel_entry_point attributed function calls
-// a potentially throwing sycl_kernel_launch function.
+// Validate that the call is marked 'unwindabort' when a non-throwing
+// sycl_kernel_entry_point attributed function calls a potentially throwing
+// sycl_kernel_launch function.
 namespace ns2 {
   template<typename KN, typename... Ts>
   void sycl_kernel_launch(const char *, Ts...);
@@ -48,13 +48,8 @@ namespace ns2 {
 }
 // CHECK: ; Function Attrs: mustprogress noinline nounwind optnone
 // CHECK: define dso_local void @_ZN3ns24skepE2KTILi2ELi0EE() #{{[0-9]+}} personality ptr @__gxx_personality_v0 {
-// CHECK:   invoke void @_ZN3ns218sycl_kernel_launchI2KNILi2EEJ2KTILi2ELi0EEEEEvPKcDpT0_(ptr noundef @.str.1)
-// CHECK:           to label %invoke.cont unwind label %terminate.lpad
-// CHECK: invoke.cont:
+// CHECK:   call unwindabort void @_ZN3ns218sycl_kernel_launchI2KNILi2EEJ2KTILi2ELi0EEEEEvPKcDpT0_(ptr noundef @.str.1)
 // CHECK:   ret void
-// CHECK: terminate.lpad:
-// CHECK:   call void @__clang_call_terminate(ptr %1) #{{[0-9]+}}
-// CHECK:   unreachable
 // CHECK: }
 
 

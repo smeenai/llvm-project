@@ -22,24 +22,23 @@ void foo1() { throw 1; }
 
 void bar();
 void foo2() noexcept(true) { bar(); }
-// __std_terminate should not be marked dllimport.
+// On MSVC, a potentially-throwing call in a noexcept function still terminates
+// via __std_terminate (which should not be marked dllimport).
 // MSVC-LABEL: define dso_local void @"?foo2@@YAXXZ"
 // MSVC: call void @__std_terminate()
 // MSVC: declare dso_local void @__std_terminate()
 
-// _ZSt9terminatev and __cxa_begin_catch should be marked dllimport.
-// ITANIUM-LABEL: define linkonce_odr hidden void @__clang_call_terminate(ptr noundef %0)
-// ITANIUM: call ptr @__cxa_begin_catch({{.*}})
-// ITANIUM: call void @_ZSt9terminatev()
-// ITANIUM: declare dllimport ptr @__cxa_begin_catch(ptr)
-// ITANIUM: declare dllimport void @_ZSt9terminatev()
+// On Itanium/GNU the call is emitted as a 'call unwindabort', so neither
+// __clang_call_terminate nor _ZSt9terminatev / __cxa_begin_catch is emitted.
+// ITANIUM-LABEL: define dso_local void @_Z4foo2v()
+// ITANIUM: call unwindabort void @_Z3barv()
+// ITANIUM-NOT: @__clang_call_terminate
+// ITANIUM-NOT: @_ZSt9terminatev
 
-// .. not for mingw.
-// GNU-LABEL: define linkonce_odr hidden void @__clang_call_terminate(ptr noundef %0)
-// GNU: call ptr @__cxa_begin_catch({{.*}})
-// GNU: call void @_ZSt9terminatev()
-// GNU: declare dso_local ptr @__cxa_begin_catch(ptr)
-// GNU: declare dso_local void @_ZSt9terminatev()
+// GNU-LABEL: define dso_local void @_Z4foo2v()
+// GNU: call unwindabort void @_Z3barv()
+// GNU-NOT: @__clang_call_terminate
+// GNU-NOT: @_ZSt9terminatev
 
 
 struct A {};

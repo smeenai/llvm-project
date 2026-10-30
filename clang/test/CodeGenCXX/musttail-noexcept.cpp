@@ -14,12 +14,10 @@ int TestNoexcept(int x) noexcept {
 
 // Noexcept caller with regular call to non-noexcept, then musttail to noexcept.
 // CHECK-LABEL: define {{.*}} @_Z21TestMixedCallNoexcepti(
-// CHECK: invoke {{.*}} @_Z12ThrowingFunci(
-// CHECK-NEXT: to label %{{.*}} unwind label %terminate.lpad
+// CHECK: call unwindabort {{.*}} @_Z12ThrowingFunci(
 // CHECK: musttail call {{.*}} @_Z14NoexceptCalleei(
 // CHECK-NEXT: ret i32
-// CHECK: terminate.lpad:
-// CHECK: call void @__clang_call_terminate(
+// CHECK-NOT: terminate.lpad
 int TestMixedCallNoexcept(int x) noexcept {
   int y = ThrowingFunc(x);
   [[clang::musttail]] return NoexceptCallee(y);
