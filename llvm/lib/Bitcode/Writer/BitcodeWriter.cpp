@@ -3556,6 +3556,11 @@ void ModuleBitcodeWriter::writeInstruction(const Instruction &I,
 
     if (CatchSwitch.hasUnwindDest())
       Vals.push_back(VE.getValueID(CatchSwitch.getUnwindDest()));
+    else if (CatchSwitch.isUnwindAbort()) {
+      // The unwindabort destination is represented by an invalid (one-past-end)
+      // basic-block-id.
+      Vals.push_back(VE.getBasicBlocks().size());
+    }
     break;
   }
   case Instruction::CallBr: {

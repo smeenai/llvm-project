@@ -5873,10 +5873,17 @@ Error BitcodeReader::parseFunctionBody(Function *F) {
       }
 
       BasicBlock *UnwindDest = nullptr;
+      bool UnwindAbort = false;
       if (Idx + 1 == Record.size()) {
-        UnwindDest = getBasicBlock(Record[Idx++]);
-        if (!UnwindDest)
-          return error("Invalid catchswitch record");
+        if (Record[Idx] == FunctionBBs.size()) {
+          // Uses numBBs+1 as flag for unwindabort.
+          UnwindAbort = true;
+        } else {
+          UnwindDest = getBasicBlock(Record[Idx]);
+          if (!UnwindDest)
+            return error("Invalid catchswitch record");
+        }
+        Idx++;
       }
 
       if (Record.size() != Idx)
@@ -5884,6 +5891,7 @@ Error BitcodeReader::parseFunctionBody(Function *F) {
 
       auto *CatchSwitch =
           CatchSwitchInst::Create(ParentPad, UnwindDest, NumHandlers);
+      CatchSwitch->setUnwindAbort(UnwindAbort);
       for (BasicBlock *Handler : Handlers)
         CatchSwitch->addHandler(Handler);
       I = CatchSwitch;
