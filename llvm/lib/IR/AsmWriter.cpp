@@ -4559,6 +4559,10 @@ void AssemblyWriter::printInstruction(const Instruction &I) {
   // Print out the opcode...
   Out << I.getOpcodeName();
 
+  // 'unwindabort' directly follows 'call', ahead of any fast-math flags.
+  if (const auto *CI = dyn_cast<CallInst>(&I); CI && CI->isUnwindAbort())
+    Out << " unwindabort";
+
   // If this is an atomic load or store, print out the atomic marker.
   if ((isa<LoadInst>(I)  && cast<LoadInst>(I).isAtomic()) ||
       (isa<StoreInst>(I) && cast<StoreInst>(I).isAtomic()))

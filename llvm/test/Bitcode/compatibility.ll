@@ -1880,6 +1880,14 @@ define void @instructions.call_notail() {
   ret void
 }
 
+define void @instructions.call_unwindabort() personality i32 -2 {
+  call unwindabort void @f1()
+  ; CHECK: call unwindabort void @f1()
+  call unwindabort fast float @fmf_f32()
+  ; CHECK: call unwindabort fast float @fmf_f32()
+  ret void
+}
+
 define void @instructions.landingpad() personality i32 -2 {
   invoke void @llvm.donothing() to label %proceed unwind label %catch1
   invoke void @llvm.donothing() to label %proceed unwind label %catch2

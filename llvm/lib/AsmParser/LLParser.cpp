@@ -8954,14 +8954,16 @@ bool LLParser::parseFreeze(Instruction *&Inst, PerFunctionState &PFS) {
 }
 
 /// parseCall
-///   ::= 'call' OptionalFastMathFlags OptionalCallingConv
+///   ::= 'call' 'unwindabort'? OptionalFastMathFlags OptionalCallingConv
 ///           OptionalAttrs Type Value ParameterList OptionalAttrs
-///   ::= 'tail' 'call' OptionalFastMathFlags OptionalCallingConv
+///   ::= 'tail' 'call' 'unwindabort'? OptionalFastMathFlags OptionalCallingConv
 ///           OptionalAttrs Type Value ParameterList OptionalAttrs
-///   ::= 'musttail' 'call' OptionalFastMathFlags OptionalCallingConv
-///           OptionalAttrs Type Value ParameterList OptionalAttrs
-///   ::= 'notail' 'call'  OptionalFastMathFlags OptionalCallingConv
-///           OptionalAttrs Type Value ParameterList OptionalAttrs
+///   ::= 'musttail' 'call' 'unwindabort'? OptionalFastMathFlags
+///           OptionalCallingConv OptionalAttrs Type Value ParameterList
+///           OptionalAttrs
+///   ::= 'notail' 'call'  'unwindabort'? OptionalFastMathFlags
+///           OptionalCallingConv OptionalAttrs Type Value ParameterList
+///           OptionalAttrs
 bool LLParser::parseCall(Instruction *&Inst, PerFunctionState &PFS,
                          CallInst::TailCallKind TCK) {
   AttrBuilder RetAttrs(M->getContext()), FnAttrs(M->getContext());
@@ -8975,11 +8977,17 @@ bool LLParser::parseCall(Instruction *&Inst, PerFunctionState &PFS,
   SmallVector<ParamInfo, 16> ArgList;
   SmallVector<OperandBundleDef, 2> BundleList;
   LocTy CallLoc = Lex.getLoc();
+  bool UnwindAbort = false;
 
   if (TCK != CallInst::TCK_None &&
       parseToken(lltok::kw_call,
                  "expected 'tail call', 'musttail call', or 'notail call'"))
     return true;
+
+  if (Lex.getKind() == lltok::kw_unwindabort) {
+    Lex.Lex();
+    UnwindAbort = true;
+  }
 
   FastMathFlags FMF = EatFastMathFlagsIfPresent();
 
@@ -9042,6 +9050,7 @@ bool LLParser::parseCall(Instruction *&Inst, PerFunctionState &PFS,
 
   CallInst *CI = CallInst::Create(Ty, Callee, Args, BundleList);
   CI->setTailCallKind(TCK);
+  CI->setUnwindAbort(UnwindAbort);
   CI->setCallingConv(CC);
   if (FMF.any()) {
     if (!isa<FPMathOperator>(CI)) {

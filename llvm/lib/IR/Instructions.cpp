@@ -353,6 +353,12 @@ bool CallBase::isTailCall() const {
   return false;
 }
 
+bool CallBase::isUnwindAbort() const {
+  if (auto *CI = dyn_cast<CallInst>(this))
+    return CI->isUnwindAbort();
+  return false;
+}
+
 Intrinsic::ID CallBase::getIntrinsicID() const {
   if (auto *F = dyn_cast_or_null<Function>(getCalledOperand()))
     return F->getIntrinsicID();
@@ -815,6 +821,7 @@ CallInst::CallInst(const CallInst &CI, AllocInfo AllocInfo)
     : CallBase(CI.Attrs, CI.FTy, CI.getType(), Instruction::Call, AllocInfo) {
   assert(getNumOperands() == CI.getNumOperands() &&
          "Wrong number of operands allocated");
+  setUnwindAbort(CI.isUnwindAbort());
   setTailCallKind(CI.getTailCallKind());
   setCallingConv(CI.getCallingConv());
 
@@ -830,6 +837,7 @@ CallInst *CallInst::Create(CallInst *CI, ArrayRef<OperandBundleDef> OpB,
 
   auto *NewCI = CallInst::Create(CI->getFunctionType(), CI->getCalledOperand(),
                                  Args, OpB, CI->getName(), InsertPt);
+  NewCI->setUnwindAbort(CI->isUnwindAbort());
   NewCI->setTailCallKind(CI->getTailCallKind());
   NewCI->setCallingConv(CI->getCallingConv());
   NewCI->FMF = CI->FMF;

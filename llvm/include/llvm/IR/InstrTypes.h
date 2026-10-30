@@ -1445,6 +1445,9 @@ public:
   /// Tests if this call site is marked as a tail call.
   LLVM_ABI bool isTailCall() const;
 
+  /// Tests if this call site is marked 'unwindabort'.
+  bool isUnwindAbort() const;
+
   /// Returns the intrinsic ID of the intrinsic called or
   /// Intrinsic::not_intrinsic if the called function is not an intrinsic, or if
   /// this is an indirect call.
