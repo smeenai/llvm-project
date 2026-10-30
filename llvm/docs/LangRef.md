@@ -10895,7 +10895,7 @@ kill:
 ##### Syntax:
 
 ```
-resume <type> <value>
+resume [unwindabort] <type> <value>
 ```
 
 ##### Overview:
@@ -10914,6 +10914,11 @@ function.
 The '`resume`' instruction resumes propagation of an existing
 (in-flight) exception whose unwinding was interrupted with a
 {ref}`landingpad <i_landingpad>` instruction.
+
+If the `unwindabort` flag is set, the personality function will be
+instructed to abort instead of proceeding to unwind to the
+caller. See also the description of `unwindabort` for the
+{ref}`call <i_call>` instruction.
 
 ##### Example:
 

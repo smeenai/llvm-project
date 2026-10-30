@@ -1042,6 +1042,7 @@ ResumeInst::ResumeInst(const ResumeInst &RI)
     : Instruction(Type::getVoidTy(RI.getContext()), Instruction::Resume,
                   AllocMarker) {
   Op<0>() = RI.Op<0>();
+  setUnwindAbort(RI.isUnwindAbort());
 }
 
 ResumeInst::ResumeInst(Value *Exn, InsertPosition InsertBefore)

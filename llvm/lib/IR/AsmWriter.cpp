@@ -4583,6 +4583,11 @@ void AssemblyWriter::printInstruction(const Instruction &I) {
       (isa<StoreInst>(I) && cast<StoreInst>(I).isElementwise()))
     Out << " elementwise";
 
+  if (const ResumeInst *RI = dyn_cast<ResumeInst>(&I)) {
+    if (RI->isUnwindAbort())
+      Out << " unwindabort";
+  }
+
   // Print out optimization information.
   writeOptimizationInfo(Out, &I);
 

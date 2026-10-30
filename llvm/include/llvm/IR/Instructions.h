@@ -4180,6 +4180,8 @@ class ResumeInst : public Instruction {
   LLVM_ABI explicit ResumeInst(Value *Exn,
                                InsertPosition InsertBefore = nullptr);
 
+  using UnwindAbortField = BoolBitfieldElementT<0>;
+
 protected:
   // Note: Instruction needs to be a friend here to call cloneImpl.
   friend class Instruction;
@@ -4198,6 +4200,11 @@ public:
   Value *getValue() const { return Op<0>(); }
 
   unsigned getNumSuccessors() const { return 0; }
+
+  bool isUnwindAbort() const { return getSubclassData<UnwindAbortField>(); }
+  void setUnwindAbort(bool IsUA = true) {
+    setSubclassData<UnwindAbortField>(IsUA);
+  }
 
   // Methods for support type inquiry through isa, cast, and dyn_cast:
   static bool classof(const Instruction *I) {
