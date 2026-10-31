@@ -16,6 +16,7 @@
 #define LLVM_PASSES_STANDARDINSTRUMENTATIONS_H
 
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSet.h"
@@ -547,6 +548,24 @@ public:
                                   ModuleAnalysisManager *MAM);
 };
 
+/// Debugging aid for the 'unwindabort' marker, which passes must preserve by
+/// hand whenever they rebuild a call. Reports any pass after which a function
+/// that previously could not unwind to its caller now can (e.g. because a
+/// 'call unwindabort' was rebuilt without the marker).
+///
+/// With -unwindabort-stress, every potentially-throwing call is first marked
+/// 'unwindabort', so that every function is checked rather than only those that
+/// happened to be entirely 'unwindabort'/'nounwind' already.
+class UnwindAbortPreservationChecker {
+  // One entry per in-flight pass: the functions that could not unwind to their
+  // caller before it ran.
+  SmallVector<SmallVector<WeakVH, 0>, 2> Snapshots;
+  SmallPtrSet<const Module *, 1> StressedModules;
+
+public:
+  void registerCallbacks(PassInstrumentationCallbacks &PIC);
+};
+
 /// This class implements --time-trace functionality for new pass manager.
 /// It provides the pass-instrumentation callbacks that measure the pass
 /// execution time. They collect time tracing info by TimeProfiler.
@@ -686,6 +705,7 @@ class StandardInstrumentations {
   IRChangedTester ChangeTester;
   VerifyInstrumentation Verify;
   DroppedVariableStatsIR DroppedStatsIR;
+  UnwindAbortPreservationChecker UnwindAbortChecker;
 
   uint64_t InstNamerNextID = 0;
   bool VerifyEach;

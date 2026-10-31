@@ -27,6 +27,7 @@
 #include "llvm/CodeGen/MachineVerifier.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/EHPersonalities.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Module.h"
@@ -1568,6 +1569,115 @@ void TimeProfilingPassesHandler::runBeforePass(StringRef PassID, IRUnitRef IR) {
 
 void TimeProfilingPassesHandler::runAfterPass() { timeTraceProfilerEnd(); }
 
+static cl::opt<bool> VerifyUnwindAbortPreserved(
+    "verify-unwindabort-preserved", cl::Hidden, cl::init(false),
+    cl::desc("Report passes that make a function able to unwind to its caller "
+             "when it previously could not (e.g. by dropping 'unwindabort')"));
+
+static cl::opt<bool> UnwindAbortStress(
+    "unwindabort-stress", cl::Hidden, cl::init(false),
+    cl::desc("Before the first pass, mark every potentially-throwing call "
+             "'unwindabort' (for use with -verify-unwindabort-preserved; the "
+             "resulting code is not meant to be run)"));
+
+/// Returns an instruction that can unwind to \p F's caller, if any.
+static const Instruction *findUnwindToCaller(const Function &F) {
+  for (const Instruction &I : instructions(F)) {
+    if (const auto *CI = dyn_cast<CallInst>(&I)) {
+      if (!CI->doesNotThrow() && !CI->isUnwindAbort())
+        return &I;
+    } else if (const auto *RI = dyn_cast<ResumeInst>(&I)) {
+      if (!RI->isUnwindAbort())
+        return &I;
+    } else if (const auto *CSI = dyn_cast<CatchSwitchInst>(&I)) {
+      if (CSI->unwindsToCaller() && !CSI->isUnwindAbort())
+        return &I;
+    } else if (const auto *CRI = dyn_cast<CleanupReturnInst>(&I)) {
+      if (CRI->unwindsToCaller())
+        return &I;
+    }
+  }
+  return nullptr;
+}
+
+static void markAllCallsUnwindAbort(Module &M) {
+  FunctionCallee GXXPersonality = M.getOrInsertFunction(
+      "__gxx_personality_v0",
+      FunctionType::get(Type::getInt32Ty(M.getContext()), /*isVarArg=*/true));
+  for (Function &F : M) {
+    if (F.isDeclaration())
+      continue;
+    if (!F.hasPersonalityFn()) {
+      // The verifier requires a personality for 'unwindabort'.
+      F.setPersonalityFn(cast<Constant>(GXXPersonality.getCallee()));
+    } else {
+      EHPersonality Pers = classifyEHPersonality(F.getPersonalityFn());
+      if (isScopedEHPersonality(Pers) || isAsynchronousEHPersonality(Pers))
+        continue;
+    }
+    for (Instruction &I : instructions(F)) {
+      if (auto *CI = dyn_cast<CallInst>(&I)) {
+        // The verifier rejects 'musttail unwindabort'.
+        if (!CI->doesNotThrow() && !CI->isMustTailCall())
+          CI->setUnwindAbort();
+      } else if (auto *RI = dyn_cast<ResumeInst>(&I)) {
+        RI->setUnwindAbort();
+      }
+    }
+  }
+}
+
+void UnwindAbortPreservationChecker::registerCallbacks(
+    PassInstrumentationCallbacks &PIC) {
+  PIC.registerBeforeNonSkippedPassCallback([this](StringRef P, IRUnitRef IR) {
+    if (UnwindAbortStress) {
+      // Instrumentation only sees const IR, but stress mode deliberately
+      // mutates it before any pass runs.
+      auto *M = const_cast<Module *>(unwrapModule(IR, /*Force=*/true));
+      if (StressedModules.insert(M).second)
+        markAllCallsUnwindAbort(*M);
+    }
+
+    // Push even for ignored passes, to keep the stack balanced with the
+    // after-pass callbacks.
+    SmallVector<WeakVH, 0> &Snapshot = Snapshots.emplace_back();
+    if (isIgnored(P) || isa<MachineFunction>(IR))
+      return;
+
+    const Function *Fn = dyn_cast<Function>(IR);
+    if (!Fn)
+      if (const auto *L = dyn_cast<Loop>(IR))
+        Fn = L->getHeader()->getParent();
+    // SCC passes can rewrite call sites outside the SCC (e.g. argument
+    // promotion updating callers), so check the whole module for them.
+    auto Check = [&Snapshot](const Function &F) {
+      if (!F.isDeclaration() && !findUnwindToCaller(F))
+        Snapshot.emplace_back(const_cast<Function *>(&F));
+    };
+    if (Fn)
+      Check(*Fn);
+    else
+      for (const Function &F : *unwrapModule(IR, /*Force=*/true))
+        Check(F);
+  });
+
+  PIC.registerAfterPassCallback([this](StringRef P, IRUnitRef IR,
+                                       const PreservedAnalyses &) {
+    for (WeakVH &VH : Snapshots.pop_back_val()) {
+      // Functions deleted by the pass are skipped; WeakVH doesn't follow
+      // RAUW, so a replaced function isn't confused with its replacement.
+      const auto *F = dyn_cast_or_null<Function>(VH);
+      if (!F || F->isDeclaration())
+        continue;
+      if (const Instruction *I = findUnwindToCaller(*F))
+        errs() << "unwindabort-check: pass '" << P << "' made '" << F->getName()
+               << "' able to unwind to its caller via:" << *I << "\n";
+    }
+  });
+  PIC.registerAfterPassInvalidatedCallback(
+      [this](StringRef, const PreservedAnalyses &) { Snapshots.pop_back(); });
+}
+
 namespace {
 
 class DisplayNode;
@@ -2516,6 +2626,8 @@ void StandardInstrumentations::registerCallbacks(
   DroppedStatsIR.registerCallbacks(PIC);
   if (MAM)
     PreservedCFGChecker.registerCallbacks(PIC, *MAM);
+  if (VerifyUnwindAbortPreserved || UnwindAbortStress)
+    UnwindAbortChecker.registerCallbacks(PIC);
 
   // TimeProfiling records the pass running time cost.
   // Its 'BeforePassCallback' can be appended at the tail of all the
