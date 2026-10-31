@@ -953,6 +953,11 @@ bool Instruction::hasSameSpecialState(const Instruction *I2,
     return CI->isTailCall() == cast<CallInst>(I2)->isTailCall() &&
            CI->getCallingConv() == cast<CallInst>(I2)->getCallingConv() &&
            CI->getFunctionType() == cast<CallInst>(I2)->getFunctionType() &&
+           // 'unwindabort' is semantically significant: two otherwise-identical
+           // calls that differ in it are NOT interchangeable, so passes that
+           // merge identical instructions (CSE, GVN, SimplifyCFG hoist/sink)
+           // must not treat them as equal and drop the marker.
+           CI->isUnwindAbort() == cast<CallInst>(I2)->isUnwindAbort() &&
            CheckAttrsSame(CI, cast<CallInst>(I2)) &&
            CI->hasIdenticalOperandBundleSchema(*cast<CallInst>(I2));
   if (const InvokeInst *CI = dyn_cast<InvokeInst>(I1))
@@ -1005,6 +1010,12 @@ bool Instruction::hasSameSpecialState(const Instruction *I2,
            cast<GetElementPtrInst>(I2)->getSourceElementType();
   if (const LandingPadInst *LP = dyn_cast<LandingPadInst>(I1))
     return LP->isCleanup() == cast<LandingPadInst>(I2)->isCleanup();
+  // 'resume' and 'catchswitch' can also carry 'unwindabort'; distinguish them
+  // for the same reason as the call above.
+  if (const ResumeInst *RI = dyn_cast<ResumeInst>(I1))
+    return RI->isUnwindAbort() == cast<ResumeInst>(I2)->isUnwindAbort();
+  if (const CatchSwitchInst *CSI = dyn_cast<CatchSwitchInst>(I1))
+    return CSI->isUnwindAbort() == cast<CatchSwitchInst>(I2)->isUnwindAbort();
 
   return true;
 }

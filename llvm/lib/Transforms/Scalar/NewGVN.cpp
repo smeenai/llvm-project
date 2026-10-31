@@ -916,9 +916,12 @@ bool CallExpression::equals(const Expression &Other) const {
     return false;
 
   if (auto *RHS = dyn_cast<CallExpression>(&Other))
-    return Call->getAttributes()
-        .intersectWith(Call->getContext(), RHS->Call->getAttributes())
-        .has_value();
+    // 'unwindabort' is semantically significant and not an attribute, so two
+    // calls that differ only in it must not be value-numbered together.
+    return Call->isUnwindAbort() == RHS->Call->isUnwindAbort() &&
+           Call->getAttributes()
+               .intersectWith(Call->getContext(), RHS->Call->getAttributes())
+               .has_value();
 
   return false;
 }

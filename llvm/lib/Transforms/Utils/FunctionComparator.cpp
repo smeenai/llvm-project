@@ -732,10 +732,17 @@ int FunctionComparator::cmpOperations(const Instruction *L,
       return Res;
     if (int Res = cmpOperandBundlesSchema(*CBL, *CBR))
       return Res;
-    if (const CallInst *CI = dyn_cast<CallInst>(L))
+    if (const CallInst *CI = dyn_cast<CallInst>(L)) {
       if (int Res = cmpNumbers(CI->getTailCallKind(),
                                cast<CallInst>(R)->getTailCallKind()))
         return Res;
+      // 'unwindabort' is semantically significant: two otherwise-identical
+      // calls that differ in it must not be considered equal, or merging would
+      // drop the marker.
+      if (int Res = cmpNumbers(CI->isUnwindAbort(),
+                               cast<CallInst>(R)->isUnwindAbort()))
+        return Res;
+    }
     return cmpMDNode(L->getMetadata(LLVMContext::MD_range),
                      R->getMetadata(LLVMContext::MD_range));
   }
@@ -745,6 +752,15 @@ int FunctionComparator::cmpOperations(const Instruction *L,
         return Res;
     return 0;
   }
+  // 'unwindabort' is semantically significant on 'resume' and 'catchswitch' too.
+  // Without comparing it here, MergeFunctions could fold two functions that
+  // differ only in the marker and drop it.
+  if (const ResumeInst *RI = dyn_cast<ResumeInst>(L))
+    return cmpNumbers(RI->isUnwindAbort(),
+                      cast<ResumeInst>(R)->isUnwindAbort());
+  if (const CatchSwitchInst *CSI = dyn_cast<CatchSwitchInst>(L))
+    return cmpNumbers(CSI->isUnwindAbort(),
+                      cast<CatchSwitchInst>(R)->isUnwindAbort());
   if (const InsertValueInst *IVI = dyn_cast<InsertValueInst>(L)) {
     ArrayRef<unsigned> LIndices = IVI->getIndices();
     ArrayRef<unsigned> RIndices = cast<InsertValueInst>(R)->getIndices();

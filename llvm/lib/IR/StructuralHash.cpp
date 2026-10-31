@@ -244,6 +244,18 @@ public:
     if (const auto *ComparisonInstruction = dyn_cast<CmpInst>(&Inst))
       Hashes.emplace_back(ComparisonInstruction->getPredicate());
 
+    // 'unwindabort' is semantically significant on call/resume/catchswitch and
+    // is not implied by the opcode or operands. Include it so functions that
+    // differ only in the marker get distinct hashes -- otherwise consumers that
+    // merge purely on the structural hash (e.g. GlobalMergeFunctions, which has
+    // no FunctionComparator gate) could merge them and drop the marker.
+    if (const auto *CI = dyn_cast<CallInst>(&Inst))
+      Hashes.emplace_back(CI->isUnwindAbort());
+    else if (const auto *RI = dyn_cast<ResumeInst>(&Inst))
+      Hashes.emplace_back(RI->isUnwindAbort());
+    else if (const auto *CSI = dyn_cast<CatchSwitchInst>(&Inst))
+      Hashes.emplace_back(CSI->isUnwindAbort());
+
     unsigned InstIdx = 0;
     if (IndexInstruction) {
       InstIdx = IndexInstruction->size();

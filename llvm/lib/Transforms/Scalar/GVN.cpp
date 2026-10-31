@@ -771,6 +771,15 @@ uint32_t GVNValueTable::lookupOrAddCall(CallInst *C) {
     return NextValueNumber++;
   }
 
+  // An 'unwindabort' call is not interchangeable with an otherwise-identical
+  // plain call, but the call expression below does not encode the marker.
+  // Conservatively give it a unique number rather than risk value-numbering it
+  // together with a call that differs only in the marker and dropping it.
+  if (C->isUnwindAbort()) {
+    ValueNumbering[C] = NextValueNumber;
+    return NextValueNumber++;
+  }
+
   if (AA->doesNotAccessMemory(C)) {
     Expression Exp = createExpr(C);
     uint32_t E = assignExpNewValueNum(Exp).first;
