@@ -11,7 +11,13 @@
 declare void @extern()
 declare void @extern_nounwind() nounwind
 declare i32 @__gxx_personality_v0(...)
+declare void @maythrow()
+declare void @other()
+@_ZTIi = external constant ptr
 
+;.
+; CHECK: @_ZTIi = external constant ptr
+;.
 define internal void @inlined_callee() personality ptr @__gxx_personality_v0 {
 entry:
   call void @extern()
@@ -79,6 +85,74 @@ define void @unwindabort_nounwind_caller() personality ptr @__gxx_personality_v0
 entry:
   call unwindabort void @inlined_callee() nounwind
   ret void
+}
+
+;; Inlining a callee whose invoke has a non-exhaustive (catch-only) landingpad
+;; through a 'call unwindabort' must (1) add a 'cleanup' clause to the inlined
+;; landingpad and (2) convert its 'resume' to 'resume unwindabort'. Otherwise a
+;; non-matching exception would escape the unwindabort scope instead of
+;; terminating.
+define internal void @callee_with_catch() personality ptr @__gxx_personality_v0 {
+entry:
+  invoke void @maythrow() to label %cont unwind label %lpad
+cont:
+  ret void
+lpad:
+  %0 = landingpad { ptr, i32 } catch ptr @_ZTIi
+  resume { ptr, i32 } %0
+}
+
+define void @unwindabort_caller_with_catch() personality ptr @__gxx_personality_v0 {
+; CHECK-LABEL: @unwindabort_caller_with_catch(
+; CHECK-NEXT:  entry:
+; CHECK-NEXT:    invoke void @maythrow()
+; CHECK-NEXT:            to label [[CALLEE_WITH_CATCH_EXIT:%.*]] unwind label [[LPAD_I:%.*]]
+; CHECK:       lpad.i:
+; CHECK-NEXT:    [[TMP0:%.*]] = landingpad { ptr, i32 }
+; CHECK-NEXT:            cleanup
+; CHECK-NEXT:            catch ptr @_ZTIi
+; CHECK-NEXT:    resume unwindabort { ptr, i32 } [[TMP0]]
+; CHECK:       callee_with_catch.exit:
+; CHECK-NEXT:    ret void
+;
+entry:
+  call unwindabort void @callee_with_catch()
+  ret void
+}
+
+;; Inlining a callee that contains a 'call unwindabort' THROUGH AN INVOKE must
+;; not turn that call into an invoke targeting the caller's unwind edge: that
+;; would change terminate-on-unwind into propagation. It stays a call, while a
+;; genuinely-throwing call (@other) is correctly converted to an invoke.
+define internal void @callee_with_ua() personality ptr @__gxx_personality_v0 {
+entry:
+  call unwindabort void @maythrow()
+  call void @other()
+  ret void
+}
+
+define void @invoke_caller() personality ptr @__gxx_personality_v0 {
+; CHECK-LABEL: @invoke_caller(
+; CHECK-NEXT:  entry:
+; CHECK-NEXT:    call unwindabort void @maythrow()
+; CHECK-NEXT:    invoke void @other()
+; CHECK-NEXT:            to label [[CALLEE_WITH_UA_EXIT:%.*]] unwind label [[LPAD:%.*]]
+; CHECK:       callee_with_ua.exit:
+; CHECK-NEXT:    br label [[OK:%.*]]
+; CHECK:       ok:
+; CHECK-NEXT:    ret void
+; CHECK:       lpad:
+; CHECK-NEXT:    [[L:%.*]] = landingpad { ptr, i32 }
+; CHECK-NEXT:            cleanup
+; CHECK-NEXT:    resume { ptr, i32 } [[L]]
+;
+entry:
+  invoke void @callee_with_ua() to label %ok unwind label %lpad
+ok:
+  ret void
+lpad:
+  %l = landingpad { ptr, i32 } cleanup
+  resume { ptr, i32 } %l
 }
 
 ;.

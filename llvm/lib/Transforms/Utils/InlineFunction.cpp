@@ -564,7 +564,11 @@ static BasicBlock *HandleCallsInBlockInlinedThroughInvoke(
     // instructions require no special handling.
     CallInst *CI = dyn_cast<CallInst>(&I);
 
-    if (!CI || CI->doesNotThrow())
+    // A 'call unwindabort' aborts on unwind rather than propagating, so it must
+    // NOT be turned into an invoke targeting the caller's unwind edge: that
+    // would change terminate-on-unwind into propagation out of the unwindabort
+    // scope. Leave it as a call (same treatment as a 'nounwind' call).
+    if (!CI || CI->doesNotThrow() || CI->isUnwindAbort())
       continue;
 
     // We do not need to (and in fact, cannot) convert possibly throwing calls
@@ -3044,7 +3048,10 @@ void llvm::InlineFunctionImpl(CallBase &CB, InlineFunctionInfo &IFI,
   }
 
   bool InlinedMustTailCalls = false, InlinedDeoptimizeCalls = false;
-  if (InlinedFunctionInfo.ContainsCalls) {
+  // Note: we must also enter this loop when inlining through an 'unwindabort'
+  // call site even if the callee contains no CallInsts, because it may still
+  // contain invokes whose 'resume'/landingpad must be marked for unwindabort.
+  if (InlinedFunctionInfo.ContainsCalls || MarkUnwindAbort) {
     CallInst::TailCallKind CallSiteTailKind = CallInst::TCK_None;
     if (CallInst *CI = dyn_cast<CallInst>(&CB))
       CallSiteTailKind = CI->getTailCallKind();
@@ -3060,6 +3067,17 @@ void llvm::InlineFunctionImpl(CallBase &CB, InlineFunctionInfo &IFI,
           if (MarkUnwindAbort)
             RI->setUnwindAbort();
         }
+
+        // When inlining through an 'unwindabort' call site, every inlined
+        // landingpad must be marked 'cleanup'. Otherwise, for an exception type
+        // not matching its catch/filter clauses, the personality would never
+        // enter the landingpad (a non-cleanup landingpad is not a handler in
+        // the search phase) and so would never reach the 'resume unwindabort'
+        // that aborts. Without this, such an exception would incorrectly escape
+        // the unwindabort scope instead of terminating the program.
+        if (MarkUnwindAbort)
+          if (LandingPadInst *LP = dyn_cast<LandingPadInst>(&I))
+            LP->setCleanup(true);
 
         CallInst *CI = dyn_cast<CallInst>(&I);
         if (!CI)
@@ -3092,6 +3110,9 @@ void llvm::InlineFunctionImpl(CallBase &CB, InlineFunctionInfo &IFI,
           NewCI->setDebugLoc(CI->getDebugLoc());
           NewCI->setAttributes(Attrs);
           NewCI->setCallingConv(CI->getCallingConv());
+          // 'unwindabort' is a semantically-significant marker, not an
+          // attribute; preserve any pre-existing one on the rebuilt call.
+          NewCI->setUnwindAbort(CI->isUnwindAbort());
           CI->replaceAllUsesWith(NewCI);
           CI->eraseFromParent();
           CI = NewCI;
