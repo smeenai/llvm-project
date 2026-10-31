@@ -3151,8 +3151,15 @@ void llvm::InlineFunctionImpl(CallBase &CB, InlineFunctionInfo &IFI,
           CI->setDoesNotThrow();
 
         // Calls inlined through an 'unwindabort' call site should be marked
-        // 'unwindabort'.
-        if (MarkUnwindAbort)
+        // 'unwindabort' -- but only if they can actually unwind. A call that
+        // cannot throw (e.g. 'operator delete', or any 'nounwind' callee) never
+        // propagates an exception, so the marker would be inert; emitting it
+        // anyway forces a gap-LSDA onto the caller and prevents the linker from
+        // ICF-folding otherwise-identical functions. Under an asynchronous-EH
+        // personality, however, 'nounwind' does not prove "cannot unwind", so we
+        // must still mark there (mirrors the InstCombine strip's guard).
+        if (MarkUnwindAbort &&
+            (!CI->doesNotThrow() || !canSimplifyInvokeNoUnwind(Caller)))
           CI->setUnwindAbort();
       }
     }

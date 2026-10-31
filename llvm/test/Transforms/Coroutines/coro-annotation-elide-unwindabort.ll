@@ -3,12 +3,14 @@
 ; coro-annotation-elide rebuilds a coro_elide_safe call into a call to the
 ; coroutine's '.noalloc' variant and inlines it. The 'unwindabort' marker on the
 ; original call must be preserved on the rebuilt (.noalloc) call; we observe it
-; via the inlined coroutine intrinsics, which the inliner marks 'unwindabort'
-; only if the elided call carried the marker.
+; via a may-throw call in the inlined body, which the inliner marks 'unwindabort'
+; only if the elided call carried the marker. (A nounwind callee -- e.g. the coro
+; intrinsics -- would NOT be marked, since the marker would be inert there.)
 
 %struct.Task = type { ptr }
 
 declare void @print(i32) nounwind
+declare void @maythrow()
 
 define fastcc void @callee.resume(ptr dereferenceable(1)) {
   tail call void @print(i32 0)
@@ -44,14 +46,17 @@ define ptr @callee.noalloc(i8 %arg, ptr dereferenceable(32) align(8) %frame) {
   %task = alloca %struct.Task, align 8
   %id = call token @llvm.coro.id(i32 0, ptr null, ptr @callee, ptr @callee.resumers)
   %hdl = call ptr @llvm.coro.begin(token %id, ptr null)
+  call void @maythrow()
   store ptr %hdl, ptr %task
   ret ptr %task
 }
 
 ; CHECK-LABEL: define ptr @caller()
-; The elided+inlined coroutine body's intrinsics carry 'unwindabort', proving
-; the rebuilt .noalloc call preserved the marker.
-; CHECK: call unwindabort token @llvm.coro.id(
+; The elided+inlined may-throw call carries 'unwindabort', proving the rebuilt
+; .noalloc call preserved the marker. The nounwind coro intrinsics, in contrast,
+; are correctly left unmarked.
+; CHECK: call unwindabort void @maythrow(
+; CHECK-NOT: call unwindabort token @llvm.coro.id(
 define ptr @caller() #0 personality ptr @__gxx_personality_v0 {
 entry:
   %task = call unwindabort ptr @callee(i8 0) #1

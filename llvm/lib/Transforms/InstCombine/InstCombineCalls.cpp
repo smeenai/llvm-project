@@ -2044,6 +2044,18 @@ Instruction *InstCombinerImpl::visitCallInst(CallInst &CI) {
       return replaceInstUsesWith(CI, V);
   }
 
+  // If the call is unwindabort and nounwind (and if nounwind _actually_ means
+  // there can't be any unwinds...), then we can remove the 'unwindabort'. This
+  // must run before getFreedOperand()/visitFree() below: deallocation calls such
+  // as 'operator delete' take that early return, so leaving the strip after it
+  // would never clean up the (inert) 'unwindabort' marker on a nounwind free
+  // call -- and that marker forces a gap-LSDA that defeats ICF folding.
+  if (CI.isUnwindAbort() && CI.doesNotThrow() &&
+      canSimplifyInvokeNoUnwind(CI.getFunction())) {
+    CI.setUnwindAbort(false);
+    return &CI;
+  }
+
   if (Value *FreedOp = getFreedOperand(&CI, &TLI))
     return visitFree(CI, FreedOp);
 
@@ -2053,14 +2065,6 @@ Instruction *InstCombinerImpl::visitCallInst(CallInst &CI) {
   if (CI.getFunction()->doesNotThrow() && !CI.isUnwindAbort() &&
       !CI.doesNotThrow()) {
     CI.setDoesNotThrow();
-    return &CI;
-  }
-
-  // If the call is unwindabort and nounwind (and if nounwind _actually_ means
-  // there can't be any unwinds...), then we can remove the 'unwindabort'.
-  if (CI.isUnwindAbort() && CI.doesNotThrow() &&
-      canSimplifyInvokeNoUnwind(CI.getFunction())) {
-    CI.setUnwindAbort(false);
     return &CI;
   }
 

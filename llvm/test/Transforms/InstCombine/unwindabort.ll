@@ -3,6 +3,8 @@
 declare void @nothrow() nounwind
 declare i32 @__gxx_personality_v0(...)
 declare i32 @_except_handler3(...)
+declare void @free(ptr) nounwind
+declare void @_ZdlPv(ptr) nounwind
 
 ; Verify that unwindabort is removed when a call is nounwind.
 define void @test() personality ptr @__gxx_personality_v0 {
@@ -11,6 +13,30 @@ define void @test() personality ptr @__gxx_personality_v0 {
 ; CHECK-NEXT:    ret void
 ;
   call unwindabort void @nothrow()
+  ret void
+}
+
+; The 'unwindabort' strip must also reach nounwind *deallocation* calls. These
+; take the getFreedOperand()/visitFree() early-return in visitCallInst, so if the
+; strip runs after it the inert marker is never removed -- and that marker forces
+; a gap-LSDA that defeats ICF folding. Verify free() is stripped.
+define void @test_free(ptr %p) personality ptr @__gxx_personality_v0 {
+; CHECK-LABEL: @test_free(
+; CHECK-NEXT:    call void @free(ptr [[P:%.*]])
+; CHECK-NEXT:    ret void
+;
+  call unwindabort void @free(ptr %p)
+  ret void
+}
+
+; Same, for 'operator delete' -- the dominant real-world case (inlined from
+; libcxx's deallocation wrappers into noexcept destructors/cleanup helpers).
+define void @test_operator_delete(ptr %p) personality ptr @__gxx_personality_v0 {
+; CHECK-LABEL: @test_operator_delete(
+; CHECK-NEXT:    call void @_ZdlPv(ptr [[P:%.*]])
+; CHECK-NEXT:    ret void
+;
+  call unwindabort void @_ZdlPv(ptr %p)
   ret void
 }
 

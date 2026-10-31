@@ -3,7 +3,10 @@
 
 ;; Ensure that inlining propagates unwindabort as expected:
 ;;
-;; Unwindabort on a callsite attaches to all calls inlined through it.
+;; Unwindabort on a callsite attaches to all calls inlined through it that can
+;; actually unwind. A 'nounwind' inlined call cannot throw, so it is NOT marked
+;; 'unwindabort' (the marker would be inert but would force a spurious gap-LSDA
+;; onto the caller, defeating ICF folding of otherwise-identical functions).
 ;;
 ;; A nounwind callsite propagates nounwind to calls inlined through
 ;; it, except that an unwindabort inner call cannot be deduced to be
@@ -11,8 +14,10 @@
 declare void @extern()
 declare void @extern_nounwind() nounwind
 declare i32 @__gxx_personality_v0(...)
+declare i32 @_except_handler3(...)
 declare void @maythrow()
 declare void @other()
+declare void @_ZdlPv(ptr) nounwind
 @_ZTIi = external constant ptr
 
 ;.
@@ -62,7 +67,7 @@ define void @unwindabort_caller() personality ptr @__gxx_personality_v0 {
 ; CHECK-LABEL: @unwindabort_caller(
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    call unwindabort void @extern()
-; CHECK-NEXT:    call unwindabort void @extern_nounwind() #[[ATTR0]]
+; CHECK-NEXT:    call void @extern_nounwind() #[[ATTR0]]
 ; CHECK-NEXT:    call unwindabort void @extern()
 ; CHECK-NEXT:    call unwindabort void @extern_nounwind() #[[ATTR0]]
 ; CHECK-NEXT:    ret void
@@ -76,8 +81,8 @@ define void @unwindabort_nounwind_caller() personality ptr @__gxx_personality_v0
 ;
 ; CHECK-LABEL: @unwindabort_nounwind_caller(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    call unwindabort void @extern() #[[ATTR0]]
-; CHECK-NEXT:    call unwindabort void @extern_nounwind() #[[ATTR0]]
+; CHECK-NEXT:    call void @extern() #[[ATTR0]]
+; CHECK-NEXT:    call void @extern_nounwind() #[[ATTR0]]
 ; CHECK-NEXT:    call unwindabort void @extern()
 ; CHECK-NEXT:    call unwindabort void @extern_nounwind() #[[ATTR0]]
 ; CHECK-NEXT:    ret void
@@ -117,6 +122,50 @@ define void @unwindabort_caller_with_catch() personality ptr @__gxx_personality_
 ;
 entry:
   call unwindabort void @callee_with_catch()
+  ret void
+}
+
+;; Real-world shape: a nounwind deallocation wrapper (e.g. libcxx's
+;; __libcpp_deallocate, which just forwards to 'operator delete') inlined through
+;; a 'call unwindabort' site. The inlined 'operator delete' is nounwind and
+;; cannot throw, so it must NOT acquire an 'unwindabort' marker -- otherwise the
+;; otherwise-nounwind caller is forced to carry a gap-LSDA, which prevents the
+;; linker from ICF-folding the (many, identical) small cleanup functions.
+define internal void @dealloc_wrapper(ptr %p) {
+entry:
+  call void @_ZdlPv(ptr %p)
+  ret void
+}
+
+define void @unwindabort_inline_dealloc(ptr %p) personality ptr @__gxx_personality_v0 {
+; CHECK-LABEL: @unwindabort_inline_dealloc(
+; CHECK-NEXT:  entry:
+; CHECK-NEXT:    call void @_ZdlPv(ptr [[P:%.*]])
+; CHECK-NEXT:    ret void
+;
+entry:
+  call unwindabort void @dealloc_wrapper(ptr %p)
+  ret void
+}
+
+;; Under an asynchronous-EH personality, 'nounwind' does NOT prove "cannot
+;; unwind", so a nounwind call inlined through 'call unwindabort' must STILL be
+;; marked 'unwindabort' (unlike the DWARF cases above). Mirrors the InstCombine
+;; strip's canSimplifyInvokeNoUnwind guard.
+define internal void @seh_callee() {
+entry:
+  call void @extern_nounwind() nounwind
+  ret void
+}
+
+define void @unwindabort_caller_seh() personality ptr @_except_handler3 {
+; CHECK-LABEL: @unwindabort_caller_seh(
+; CHECK-NEXT:  entry:
+; CHECK-NEXT:    call unwindabort void @extern_nounwind() #[[ATTR0]]
+; CHECK-NEXT:    ret void
+;
+entry:
+  call unwindabort void @seh_callee()
   ret void
 }
 
