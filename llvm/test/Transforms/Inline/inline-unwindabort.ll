@@ -125,6 +125,133 @@ entry:
   ret void
 }
 
+;; Inlining a callee whose invoke unwinds to a cleanup-only landingpad through a
+;; 'call unwindabort' turns the invoke into 'call unwindabort' and drops the
+;; cleanup: an exception reaching it would terminate at the inlined 'resume'
+;; anyway, and unwindabort permits skipping cleanups before terminating.
+declare void @dtor(ptr) nounwind
+
+define internal void @callee_with_cleanup(ptr %obj) personality ptr @__gxx_personality_v0 {
+entry:
+  invoke void @maythrow() to label %cont unwind label %lpad
+cont:
+  call void @dtor(ptr %obj)
+  ret void
+lpad:
+  %lp = landingpad { ptr, i32 } cleanup
+  call void @dtor(ptr %obj)
+  resume { ptr, i32 } %lp
+}
+
+define void @unwindabort_caller_with_cleanup(ptr %obj) personality ptr @__gxx_personality_v0 {
+; CHECK-LABEL: @unwindabort_caller_with_cleanup(
+; CHECK-NEXT:  entry:
+; CHECK-NEXT:    call unwindabort void @maythrow()
+; CHECK-NEXT:    br label [[CALLEE_WITH_CLEANUP_EXIT:%.*]]
+; CHECK:       callee_with_cleanup.exit:
+; CHECK-NEXT:    call void @dtor(ptr [[OBJ:%.*]])
+; CHECK-NEXT:    ret void
+;
+entry:
+  call unwindabort void @callee_with_cleanup(ptr %obj)
+  ret void
+}
+
+;; Without 'unwindabort' on the call site, the cleanup must be kept.
+define void @caller_with_cleanup(ptr %obj) personality ptr @__gxx_personality_v0 {
+; CHECK-LABEL: @caller_with_cleanup(
+; CHECK-NEXT:  entry:
+; CHECK-NEXT:    invoke void @maythrow()
+; CHECK-NEXT:            to label [[CALLEE_WITH_CLEANUP_EXIT:%.*]] unwind label [[LPAD_I:%.*]]
+; CHECK:       lpad.i:
+; CHECK-NEXT:    [[LP_I:%.*]] = landingpad { ptr, i32 }
+; CHECK-NEXT:            cleanup
+; CHECK-NEXT:    call void @dtor(ptr [[OBJ:%.*]])
+; CHECK-NEXT:    resume { ptr, i32 } [[LP_I]]
+; CHECK:       callee_with_cleanup.exit:
+; CHECK-NEXT:    call void @dtor(ptr [[OBJ]])
+; CHECK-NEXT:    ret void
+;
+entry:
+  call void @callee_with_cleanup(ptr %obj)
+  ret void
+}
+
+;; A cleanup that can return normally may swallow the exception, which then
+;; never propagates out of the callee, so it must be kept.
+define internal void @callee_with_swallowing_cleanup() personality ptr @__gxx_personality_v0 {
+entry:
+  invoke void @maythrow() to label %cont unwind label %lpad
+cont:
+  ret void
+lpad:
+  %lp = landingpad { ptr, i32 } cleanup
+  br label %cont
+}
+
+define void @unwindabort_caller_with_swallowing_cleanup() personality ptr @__gxx_personality_v0 {
+; CHECK-LABEL: @unwindabort_caller_with_swallowing_cleanup(
+; CHECK-NEXT:  entry:
+; CHECK-NEXT:    invoke void @maythrow()
+; CHECK-NEXT:            to label [[CALLEE_WITH_SWALLOWING_CLEANUP_EXIT:%.*]] unwind label [[LPAD_I:%.*]]
+; CHECK:       lpad.i:
+; CHECK-NEXT:    [[LP_I:%.*]] = landingpad { ptr, i32 }
+; CHECK-NEXT:            cleanup
+; CHECK-NEXT:    br label [[CALLEE_WITH_SWALLOWING_CLEANUP_EXIT]]
+; CHECK:       callee_with_swallowing_cleanup.exit:
+; CHECK-NEXT:    ret void
+;
+entry:
+  call unwindabort void @callee_with_swallowing_cleanup()
+  ret void
+}
+
+;; Only the invoke unwinding to the cleanup-only landingpad is converted; the one
+;; whose landingpad has a catch clause keeps it (gaining 'cleanup', as above).
+;; The two landingpads share a resume block, whose PHI must lose the dropped
+;; cleanup's incoming value.
+define internal void @callee_with_cleanup_and_catch(ptr %obj) personality ptr @__gxx_personality_v0 {
+entry:
+  invoke void @maythrow() to label %next unwind label %lpad.cleanup
+next:
+  invoke void @other() to label %done unwind label %lpad.catch
+done:
+  ret void
+lpad.cleanup:
+  %lp1 = landingpad { ptr, i32 } cleanup
+  call void @dtor(ptr %obj)
+  br label %resume
+lpad.catch:
+  %lp2 = landingpad { ptr, i32 } catch ptr @_ZTIi
+  br label %resume
+resume:
+  %exn = phi { ptr, i32 } [ %lp1, %lpad.cleanup ], [ %lp2, %lpad.catch ]
+  resume { ptr, i32 } %exn
+}
+
+define void @unwindabort_caller_with_cleanup_and_catch(ptr %obj) personality ptr @__gxx_personality_v0 {
+; CHECK-LABEL: @unwindabort_caller_with_cleanup_and_catch(
+; CHECK-NEXT:  entry:
+; CHECK-NEXT:    call unwindabort void @maythrow()
+; CHECK-NEXT:    br label [[NEXT_I:%.*]]
+; CHECK:       next.i:
+; CHECK-NEXT:    invoke void @other()
+; CHECK-NEXT:            to label [[CALLEE_WITH_CLEANUP_AND_CATCH_EXIT:%.*]] unwind label [[LPAD_CATCH_I:%.*]]
+; CHECK:       lpad.catch.i:
+; CHECK-NEXT:    [[LP2_I:%.*]] = landingpad { ptr, i32 }
+; CHECK-NEXT:            cleanup
+; CHECK-NEXT:            catch ptr @_ZTIi
+; CHECK-NEXT:    br label [[RESUME_I:%.*]]
+; CHECK:       resume.i:
+; CHECK-NEXT:    resume unwindabort { ptr, i32 } [[LP2_I]]
+; CHECK:       callee_with_cleanup_and_catch.exit:
+; CHECK-NEXT:    ret void
+;
+entry:
+  call unwindabort void @callee_with_cleanup_and_catch(ptr %obj)
+  ret void
+}
+
 ;; Real-world shape: a nounwind deallocation wrapper (e.g. libcxx's
 ;; __libcpp_deallocate, which just forwards to 'operator delete') inlined through
 ;; a 'call unwindabort' site. The inlined 'operator delete' is nounwind and

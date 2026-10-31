@@ -69,6 +69,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Transforms/Utils/AssumeBundleBuilder.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/ValueMapper.h"
@@ -548,6 +549,79 @@ static Value *getUnwindDestToken(Instruction *EHPad,
   }
 
   return UnwindDestToken;
+}
+
+/// Whether \p LPadBB is a cleanup-only landingpad whose cleanup can never
+/// return normally, i.e. every exception entering it leaves the inlined callee
+/// via a 'resume' (or never leaves at all).
+static bool isCleanupOnlyLandingPadThatResumes(BasicBlock *LPadBB) {
+  LandingPadInst *LP = LPadBB->getLandingPadInst();
+  if (!LP || !LP->isCleanup() || LP->getNumClauses() != 0)
+    return false;
+
+  // A cleanup that can reach a 'ret' might swallow the exception, in which case
+  // it never would have propagated out of the callee. The walk follows every
+  // successor, including unwind edges of invokes within the cleanup, so any
+  // handler reachable from the cleanup is covered too.
+  SmallVector<BasicBlock *, 16> Worklist = {LPadBB};
+  SmallPtrSet<BasicBlock *, 16> Visited = {LPadBB};
+  while (!Worklist.empty()) {
+    BasicBlock *BB = Worklist.pop_back_val();
+    if (isa<ReturnInst>(BB->getTerminator()))
+      return false;
+    for (BasicBlock *Succ : successors(BB))
+      if (Visited.insert(Succ).second)
+        Worklist.push_back(Succ);
+  }
+  return true;
+}
+
+/// When inlining through a 'call unwindabort' site, turn inlined invokes that
+/// unwind to cleanup-only landingpads into plain calls (the caller marks them
+/// 'unwindabort' afterwards) and delete the now-dead cleanup code.
+///
+/// Such an exception would run the cleanup and then reach a 'resume
+/// unwindabort', i.e. terminate. Since 'unwindabort' leaves it unspecified
+/// whether cleanups run before terminating, the cleanup can be skipped. This is
+/// also what libc++abi does for the un-inlined code: its search phase hits the
+/// unwindabort gap and terminates before any cleanup runs.
+///
+/// Must run before the callee's 'ret's are rewritten, since those are what
+/// isCleanupOnlyLandingPadThatResumes looks for.
+static void dropInlinedCleanupsForUnwindAbort(Function::iterator FirstNewBlock,
+                                              Function *Caller) {
+  SmallVector<InvokeInst *, 8> InvokesToConvert;
+  DenseMap<BasicBlock *, bool> IsDroppable;
+  for (BasicBlock &BB : make_range(FirstNewBlock, Caller->end())) {
+    auto *II = dyn_cast<InvokeInst>(BB.getTerminator());
+    if (!II)
+      continue;
+    auto [It, Inserted] = IsDroppable.try_emplace(II->getUnwindDest());
+    if (Inserted)
+      It->second = isCleanupOnlyLandingPadThatResumes(II->getUnwindDest());
+    if (It->second)
+      InvokesToConvert.push_back(II);
+  }
+  if (InvokesToConvert.empty())
+    return;
+
+  for (InvokeInst *II : InvokesToConvert)
+    changeToCall(II);
+
+  // Only delete blocks within the inlined region: the caller's own blocks may
+  // be referenced by the inliner's callers (e.g. pending call sites).
+  SmallPtrSet<BasicBlock *, 32> Reachable = {&*FirstNewBlock};
+  SmallVector<BasicBlock *, 32> Worklist = {&*FirstNewBlock};
+  while (!Worklist.empty())
+    for (BasicBlock *Succ : successors(Worklist.pop_back_val()))
+      if (Reachable.insert(Succ).second)
+        Worklist.push_back(Succ);
+
+  SmallVector<BasicBlock *, 16> DeadBlocks;
+  for (BasicBlock &BB : make_range(FirstNewBlock, Caller->end()))
+    if (!Reachable.contains(&BB))
+      DeadBlocks.push_back(&BB);
+  DeleteDeadBlocks(DeadBlocks);
 }
 
 /// When we inline a basic block into an invoke,
@@ -3046,6 +3120,9 @@ void llvm::InlineFunctionImpl(CallBase &CB, InlineFunctionInfo &IFI,
     VarArgsToForward.push_back(CB.getArgOperand(i));
     VarArgsAttrs.push_back(CB.getAttributes().getParamAttrs(i));
   }
+
+  if (MarkUnwindAbort)
+    dropInlinedCleanupsForUnwindAbort(FirstNewBlock, Caller);
 
   bool InlinedMustTailCalls = false, InlinedDeoptimizeCalls = false;
   // Note: we must also enter this loop when inlining through an 'unwindabort'
