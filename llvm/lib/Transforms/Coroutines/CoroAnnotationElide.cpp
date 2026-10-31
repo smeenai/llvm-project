@@ -80,7 +80,10 @@ static void processCall(CallBase *CB, Function *Caller, Function *NewCallee,
   if (auto *CI = dyn_cast<CallInst>(CB)) {
     auto *NewCI = CallInst::Create(NewCallee->getFunctionType(), NewCallee,
                                    NewArgs, "", NewCBInsertPt);
-    NewCI->setTailCallKind(CI->getTailCallKind());
+    // Carry over the signature-independent subclass-data call flags (tail-call
+    // kind and the 'unwindabort' marker), which are not covered by
+    // attribute/bundle/operand copying.
+    NewCI->copyCallFlagsFrom(CI);
     NewCB = NewCI;
   } else if (auto *II = dyn_cast<InvokeInst>(CB)) {
     NewCB = InvokeInst::Create(NewCallee->getFunctionType(), NewCallee,

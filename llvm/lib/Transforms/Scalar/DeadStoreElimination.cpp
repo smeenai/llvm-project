@@ -2276,6 +2276,7 @@ bool DSEState::tryFoldIntoCalloc(MemoryDef *Def, const Value *DefUO) {
       !memoryIsNotModifiedBetween(Malloc, MemSet, BatchAA, DL, &DT))
     return false;
   IRBuilder<> IRB(Malloc);
+  IRB.setDefaultUnwindAbort(Malloc->isUnwindAbort());
   assert(Func == LibFunc_malloc || !ZeroedVariantName.empty());
   Value *Calloc = nullptr;
   if (!ZeroedVariantName.empty()) {

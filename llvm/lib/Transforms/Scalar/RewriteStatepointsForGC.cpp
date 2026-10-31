@@ -1790,7 +1790,11 @@ makeStatepointExplicitImpl(CallBase *Call, /* to replace */
         StatepointID, NumPatchBytes, CallTarget, Flags, CallArgs,
         TransitionArgs, DeoptArgs, GCLive, "safepoint_token");
 
-    SPCall->setTailCallKind(CI->getTailCallKind());
+    // Carry over the signature-independent subclass-data call flags (tail-call
+    // kind and the 'unwindabort' marker), which are not covered by
+    // attribute/bundle/operand copying (the backend statepoint lowering honors
+    // the 'unwindabort' marker).
+    SPCall->copyCallFlagsFrom(CI);
     SPCall->setCallingConv(CI->getCallingConv());
 
     // Set up function attrs directly on statepoint and return attrs later for

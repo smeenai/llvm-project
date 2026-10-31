@@ -12552,6 +12552,10 @@ struct AAIndirectCallInfoCallSite : public AAIndirectCallInfo {
       Instruction *NewCall =
           CallInst::Create(FunctionCallee(CSFT, NewCallee), CSArgs,
                            CB->getName(), CB->getIterator());
+      // 'unwindabort' is a semantic marker, not an attribute; carry it over from
+      // the indirect call to the new direct call.
+      if (auto *OldCI = dyn_cast<CallInst>(CB))
+        cast<CallInst>(NewCall)->setUnwindAbort(OldCI->isUnwindAbort());
       if (!CBIsVoid)
         A.changeAfterManifest(IRPosition::callsite_returned(*CB), *NewCall);
       A.deleteAfterManifest(*CB);
@@ -12607,6 +12611,9 @@ struct AAIndirectCallInfoCallSite : public AAIndirectCallInfo {
       } else {
         NewCall = CallInst::Create(FunctionCallee(CSFT, NewCallee), CSArgs,
                                    CB->getName(), ThenTI->getIterator());
+        // 'unwindabort' is a semantic marker, not an attribute; carry it over.
+        if (auto *OldCI = dyn_cast<CallInst>(CB))
+          NewCall->setUnwindAbort(OldCI->isUnwindAbort());
       }
       NewCalls.push_back({NewCall, RetBC});
     }

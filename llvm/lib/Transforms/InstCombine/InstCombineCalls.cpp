@@ -5613,8 +5613,10 @@ bool InstCombinerImpl::transformConstExprCastCall(CallBase &Call) {
                                    II->getUnwindDest(), Args, OpBundles);
   } else {
     NewCall = Builder.CreateCall(Callee, Args, OpBundles);
-    cast<CallInst>(NewCall)->setTailCallKind(
-        cast<CallInst>(Caller)->getTailCallKind());
+    // Carry over the signature-independent subclass-data call flags (tail-call
+    // kind and the 'unwindabort' marker), which are not covered by
+    // attribute/bundle/operand copying.
+    cast<CallInst>(NewCall)->copyCallFlagsFrom(cast<CallInst>(Caller));
   }
   NewCall->takeName(Caller);
   NewCall->setCallingConv(Call.getCallingConv());
@@ -5776,8 +5778,10 @@ InstCombinerImpl::transformCallThroughTrampoline(CallBase &Call,
         cast<CallBrInst>(NewCaller)->setAttributes(NewPAL);
       } else {
         NewCaller = CallInst::Create(NewFTy, NestF, NewArgs, OpBundles);
-        cast<CallInst>(NewCaller)->setTailCallKind(
-            cast<CallInst>(Call).getTailCallKind());
+        // Carry over the signature-independent subclass-data call flags
+        // (tail-call kind and the 'unwindabort' marker), which are not covered
+        // by attribute/bundle/operand copying.
+        cast<CallInst>(NewCaller)->copyCallFlagsFrom(cast<CallInst>(&Call));
         cast<CallInst>(NewCaller)->setCallingConv(
             cast<CallInst>(Call).getCallingConv());
         cast<CallInst>(NewCaller)->setAttributes(NewPAL);

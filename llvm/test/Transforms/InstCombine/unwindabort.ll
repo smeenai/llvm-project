@@ -24,3 +24,41 @@ define void @testSEH() personality ptr @_except_handler3 {
   call unwindabort void @nothrow()
   ret void
 }
+
+;; Every call a libcall simplification creates must keep the marker, including
+;; ones nested inside the replacement rather than at its root.
+declare double @sqrt(double)
+declare double @pow(double, double)
+
+define float @test_libcall_shrink(float %x) personality ptr @__gxx_personality_v0 {
+; CHECK-LABEL: @test_libcall_shrink(
+; CHECK-NEXT:    [[SQRTF:%.*]] = call unwindabort float @sqrtf(float [[X:%.*]])
+; CHECK-NEXT:    ret float [[SQRTF]]
+;
+  %d = fpext float %x to double
+  %r = call unwindabort double @sqrt(double %d)
+  %f = fptrunc double %r to float
+  ret float %f
+}
+
+define double @test_libcall_nested(double %x) personality ptr @__gxx_personality_v0 {
+; CHECK-LABEL: @test_libcall_nested(
+; CHECK-NEXT:    [[SQRT:%.*]] = call unwindabort afn double @sqrt(double [[X:%.*]])
+; CHECK-NEXT:    [[R:%.*]] = fmul afn double [[X]], [[SQRT]]
+; CHECK-NEXT:    ret double [[R]]
+;
+  %r = call unwindabort afn double @pow(double %x, double 1.5)
+  ret double %r
+}
+
+declare double @cosh(double)
+
+define double @test_libcall_symmetric(double %x) personality ptr @__gxx_personality_v0 {
+; CHECK-LABEL: @test_libcall_symmetric(
+; CHECK-NEXT:    [[R:%.*]] = call unwindabort double @cosh(double [[X:%.*]])
+; CHECK-NEXT:    ret double [[R]]
+;
+  %neg = fneg double %x
+  %r = call unwindabort double @cosh(double %neg)
+  ret double %r
+}

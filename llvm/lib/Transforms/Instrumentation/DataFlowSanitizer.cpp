@@ -3120,6 +3120,9 @@ bool DFSanVisitor::visitWrappedCallBase(Function &F, CallBase &CB) {
         {transformFunctionAttributes(CustomFnTy, CI->getContext(),
                                      CI->getAttributes()),
          F.getAttributes(), CustomFnTy.NewParamAttrs}));
+    // 'unwindabort' is a semantic marker, not an attribute; carry it over to the
+    // custom wrapper call.
+    CustomCI->setUnwindAbort(CI->isUnwindAbort());
 
     // Loads the return value shadow and origin.
     if (!FT->getReturnType()->isVoidTy()) {

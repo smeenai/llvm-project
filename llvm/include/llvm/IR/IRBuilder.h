@@ -131,6 +131,8 @@ protected:
 
   ArrayRef<OperandBundleDef> DefaultOperandBundles;
 
+  bool DefaultUnwindAbort = false;
+
   IRBuilderBase(LLVMContext &context, const IRBuilderFolder &Folder,
                 InsertFn InsertCB)
       : Context(context), Folder(Folder), InsertCB(InsertCB) {
@@ -344,6 +346,15 @@ public:
     DefaultOperandBundles = OpBundles;
   }
 
+  /// If set, calls created by this builder that may unwind are marked
+  /// 'unwindabort'. Useful when a transform replaces a 'call unwindabort' with
+  /// an arbitrary sequence of new instructions: every new call that could
+  /// unwind must carry the marker too, not just the one replacing the
+  /// original.
+  void setDefaultUnwindAbort(bool UnwindAbort) {
+    DefaultUnwindAbort = UnwindAbort;
+  }
+
   //===--------------------------------------------------------------------===//
   // RAII helpers.
   //===--------------------------------------------------------------------===//
@@ -416,6 +427,21 @@ public:
     }
   };
 
+  // RAII object that stores the current default 'unwindabort' setting and
+  // restores it when the object is destroyed.
+  class UnwindAbortGuard {
+    IRBuilderBase &Builder;
+    bool DefaultUnwindAbort;
+
+  public:
+    UnwindAbortGuard(IRBuilderBase &B)
+        : Builder(B), DefaultUnwindAbort(B.DefaultUnwindAbort) {}
+
+    UnwindAbortGuard(const UnwindAbortGuard &) = delete;
+    UnwindAbortGuard &operator=(const UnwindAbortGuard &) = delete;
+
+    ~UnwindAbortGuard() { Builder.DefaultUnwindAbort = DefaultUnwindAbort; }
+  };
 
   //===--------------------------------------------------------------------===//
   // Miscellaneous creation methods.
@@ -2562,6 +2588,8 @@ public:
                        ArrayRef<Value *> Args = {}, const Twine &Name = "",
                        MDNode *FPMathTag = nullptr) {
     CallInst *CI = CallInst::Create(FTy, Callee, Args, DefaultOperandBundles);
+    if (DefaultUnwindAbort && !CI->doesNotThrow())
+      CI->setUnwindAbort();
     if (IsFPConstrained)
       setConstrainedFPCallAttr(CI);
     if (isa<FPMathOperator>(CI))
@@ -2580,6 +2608,8 @@ public:
                        ArrayRef<OperandBundleDef> OpBundles,
                        const Twine &Name = "", MDNode *FPMathTag = nullptr) {
     CallInst *CI = CallInst::Create(FTy, Callee, Args, OpBundles);
+    if (DefaultUnwindAbort && !CI->doesNotThrow())
+      CI->setUnwindAbort();
     if (IsFPConstrained)
       setConstrainedFPCallAttr(CI);
     if (isa<FPMathOperator>(CI))
@@ -2592,6 +2622,8 @@ public:
                        FMFSource FMFSource, const Twine &Name = "",
                        MDNode *FPMathTag = nullptr) {
     CallInst *CI = CallInst::Create(FTy, Callee, Args, OpBundles);
+    if (DefaultUnwindAbort && !CI->doesNotThrow())
+      CI->setUnwindAbort();
     if (IsFPConstrained)
       setConstrainedFPCallAttr(CI);
     if (isa<FPMathOperator>(CI))

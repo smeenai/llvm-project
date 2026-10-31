@@ -4414,6 +4414,12 @@ Value *LibCallSimplifier::optimizeCall(CallInst *CI, IRBuilderBase &Builder) {
   IRBuilderBase::OperandBundlesGuard Guard(Builder);
   Builder.setDefaultOperandBundles(OpBundles);
 
+  // Every call created while replacing an 'unwindabort' call needs the marker,
+  // including ones nested inside the replacement (e.g. sqrt(fpext x) ->
+  // fpext(sqrtf x)), which copyFlags() doesn't reach.
+  IRBuilderBase::UnwindAbortGuard UnwindAbortGuard(Builder);
+  Builder.setDefaultUnwindAbort(CI->isUnwindAbort());
+
   // Command-line parameter overrides instruction attribute.
   // This can't be moved to optimizeFloatingPointLibCall() because it may be
   // used by the intrinsic optimizations.
@@ -4860,6 +4866,10 @@ Value *FortifiedLibCallSimplifier::optimizeCall(CallInst *CI,
 
   IRBuilderBase::OperandBundlesGuard Guard(Builder);
   Builder.setDefaultOperandBundles(OpBundles);
+
+  // See LibCallSimplifier::optimizeCall.
+  IRBuilderBase::UnwindAbortGuard UnwindAbortGuard(Builder);
+  Builder.setDefaultUnwindAbort(CI->isUnwindAbort());
 
   // First, check that this is a known library functions and that the prototype
   // is correct.

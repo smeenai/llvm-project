@@ -1730,6 +1730,21 @@ public:
     setSubclassData<UnwindAbortField>(IsUA);
   }
 
+  /// Copy the signature-independent subclass-data call flags from \p Src.
+  ///
+  /// These are CallInst-specific flags stored in the instruction's subclass
+  /// data (currently the tail-call kind and the unwindabort marker). Unlike
+  /// the calling convention, attributes, and operand bundles, they are not
+  /// covered by attribute/bundle/operand copying, so passes that rebuild a
+  /// call from scratch (e.g. to change the callee or signature) must copy them
+  /// explicitly. Centralizing the copy here ensures any new such flag only has
+  /// to be handled in one place. New CallInst subclass-data flags that are
+  /// signature-independent should be added to this helper.
+  void copyCallFlagsFrom(const CallInst *Src) {
+    setTailCallKind(Src->getTailCallKind());
+    setUnwindAbort(Src->isUnwindAbort());
+  }
+
   /// Return true if the call can return twice
   bool canReturnTwice() const { return hasFnAttr(Attribute::ReturnsTwice); }
   void setCanReturnTwice() { addFnAttr(Attribute::ReturnsTwice); }

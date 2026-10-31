@@ -825,6 +825,9 @@ bool ExpandVariadics::expandCall(Module &M, IRBuilder<> &Builder, CallBase *CB,
 
     NewCB = CallInst::Create(NFTy, Dst, Args, OpBundles, "", CI->getIterator());
 
+    // 'unwindabort' is a semantic marker, not an attribute; preserve it.
+    cast<CallInst>(NewCB)->setUnwindAbort(CI->isUnwindAbort());
+
     CallInst::TailCallKind TCK = CI->getTailCallKind();
     assert(TCK != CallInst::TCK_MustTail);
 

@@ -232,6 +232,10 @@ static bool lowerObjCCall(Function &F, RTLIB::LibcallImpl NewFn,
     CallInst::TailCallKind TCK = CI->getTailCallKind();
     NewCI->setTailCallKind(std::max(TCK, OverridingTCK));
 
+    // 'unwindabort' is a semantic marker, not an attribute; carry it over to the
+    // lowered call.
+    NewCI->setUnwindAbort(CI->isUnwindAbort());
+
     // Transfer the 'returned' attribute from the intrinsic to the call site.
     // By applying this only to intrinsic call sites, we avoid applying it to
     // non-ARC explicit calls to things like objc_retain which have not been

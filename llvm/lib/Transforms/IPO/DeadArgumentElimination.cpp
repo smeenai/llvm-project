@@ -176,8 +176,10 @@ bool DeadArgumentEliminationPass::deleteDeadVarargs(Function &F) {
                                  Args, OpBundles, "", CB->getIterator());
     } else {
       NewCB = CallInst::Create(NF, Args, OpBundles, "", CB->getIterator());
-      cast<CallInst>(NewCB)->setTailCallKind(
-          cast<CallInst>(CB)->getTailCallKind());
+      // Carry over the signature-independent subclass-data call flags
+      // (tail-call kind and the 'unwindabort' marker), which are not covered
+      // by attribute/bundle/operand copying.
+      cast<CallInst>(NewCB)->copyCallFlagsFrom(cast<CallInst>(CB));
     }
     NewCB->setCallingConv(CB->getCallingConv());
     NewCB->setAttributes(PAL);
@@ -933,8 +935,10 @@ bool DeadArgumentEliminationPass::removeDeadStuffFromFunction(Function *F) {
                                  Args, OpBundles, "", CB.getParent());
     } else {
       NewCB = CallInst::Create(NFTy, NF, Args, OpBundles, "", CB.getIterator());
-      cast<CallInst>(NewCB)->setTailCallKind(
-          cast<CallInst>(&CB)->getTailCallKind());
+      // Carry over the signature-independent subclass-data call flags
+      // (tail-call kind and the 'unwindabort' marker), which are not covered
+      // by attribute/bundle/operand copying.
+      cast<CallInst>(NewCB)->copyCallFlagsFrom(cast<CallInst>(&CB));
     }
     NewCB->setCallingConv(CB.getCallingConv());
     NewCB->setAttributes(NewCallPAL);

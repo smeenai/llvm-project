@@ -1598,9 +1598,12 @@ void DevirtModule::applyICallBranchFunnel(VTableSlotInfo &SlotInfo,
         }
         FunctionEntryCounts[&JT] += CallCount;
       }
-      if (isa<CallInst>(CB))
+      if (isa<CallInst>(CB)) {
         NewCS = IRB.CreateCall(NewFT, &JT, Args);
-      else
+        // 'unwindabort' is a semantic marker, not an attribute; carry it over.
+        cast<CallInst>(NewCS)->setUnwindAbort(
+            cast<CallInst>(CB).isUnwindAbort());
+      } else
         NewCS =
             IRB.CreateInvoke(NewFT, &JT, cast<InvokeInst>(CB).getNormalDest(),
                              cast<InvokeInst>(CB).getUnwindDest(), Args);

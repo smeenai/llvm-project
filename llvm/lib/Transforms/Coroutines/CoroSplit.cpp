@@ -116,6 +116,8 @@ static void lowerAwaitSuspend(IRBuilder<> &Builder, CoroAwaitSuspendInst *CB,
 
     WrapperCall->setAttributes(NewAttributes);
     WrapperCall->setDebugLoc(Call->getDebugLoc());
+    // 'unwindabort' is a semantic marker, not an attribute; preserve it.
+    WrapperCall->setUnwindAbort(Call->isUnwindAbort());
     NewCall = WrapperCall;
   } else {
     llvm_unreachable("Unexpected coro_await_suspend invocation method");
@@ -137,6 +139,11 @@ static void lowerAwaitSuspend(IRBuilder<> &Builder, CoroAwaitSuspendInst *CB,
     LLVMContext &Ctx = Builder.getContext();
     FunctionType *ResumeTy = FunctionType::get(
         Type::getVoidTy(Ctx), PointerType::getUnqual(Ctx), false);
+    // This deliberately doesn't inherit 'unwindabort' from CB. The
+    // await_suspend call's EH scope doesn't cover the symmetric transfer (in
+    // the invoke case, this call lands in the normal destination, outside the
+    // landing pad's coverage), and in the resume clones it becomes musttail,
+    // which can't be 'unwindabort'.
     auto *ResumeCall = Builder.CreateCall(ResumeTy, ResumeAddr, {NewCall});
 
     // We can't insert the 'ret' instruction and adjust the cc until the

@@ -3179,7 +3179,12 @@ ChangeStatus Attributor::rewriteFunctionSignatures(
       } else {
         auto *NewCI = CallInst::Create(NewFn, NewArgOperands, OperandBundleDefs,
                                        "", OldCB->getIterator());
-        NewCI->setTailCallKind(cast<CallInst>(OldCB)->getTailCallKind());
+        // Carry over the signature-independent subclass-data call flags
+        // (tail-call kind and the 'unwindabort' marker), which are not covered
+        // by attribute/bundle/operand copying. In particular, a signature
+        // rewrite must preserve 'unwindabort' or an exception that should
+        // terminate would instead propagate out of the rewritten call site.
+        NewCI->copyCallFlagsFrom(cast<CallInst>(OldCB));
         NewCB = NewCI;
       }
 

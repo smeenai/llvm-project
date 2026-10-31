@@ -516,6 +516,7 @@ bool AllocToken::replaceAllocationCall(CallBase *CB, LibFunc Func,
     NewCall = IRB.CreateInvoke(TokenAlloc, II->getNormalDest(),
                                II->getUnwindDest(), NewArgs, Bundles);
   } else {
+    IRB.setDefaultUnwindAbort(cast<CallInst>(CB)->isUnwindAbort());
     NewCall = IRB.CreateCall(TokenAlloc, NewArgs, Bundles);
     cast<CallInst>(NewCall)->setTailCall(CB->isTailCall());
   }

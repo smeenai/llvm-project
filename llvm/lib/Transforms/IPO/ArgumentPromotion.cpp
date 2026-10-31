@@ -286,7 +286,10 @@ doPromotion(Function *F, FunctionAnalysisManager &FAM,
     } else {
       auto *NewCall =
           CallInst::Create(NF, Args, OpBundles, "", CB.getIterator());
-      NewCall->setTailCallKind(cast<CallInst>(&CB)->getTailCallKind());
+      // Carry over the signature-independent subclass-data call flags
+      // (tail-call kind and the 'unwindabort' marker), which are not covered
+      // by attribute/bundle/operand copying.
+      NewCall->copyCallFlagsFrom(cast<CallInst>(&CB));
       NewCS = NewCall;
     }
     NewCS->setCallingConv(CB.getCallingConv());

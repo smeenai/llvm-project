@@ -2366,6 +2366,9 @@ void VPWidenCallRecipe::execute(VPTransformState &State) {
     Args.push_back(Arg);
   }
 
+  auto *CI = cast_or_null<CallInst>(getUnderlyingValue());
+  IRBuilderBase::UnwindAbortGuard UnwindAbortGuard(State.Builder);
+  State.Builder.setDefaultUnwindAbort(CI && CI->isUnwindAbort());
   CallInst *V = State.Builder.CreateCall(Variant, Args);
   applyFlags(*V);
   applyMetadata(*V);
