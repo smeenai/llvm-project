@@ -917,6 +917,35 @@ static bool hasEnclosingEHRequirement(mlir::Operation *op) {
   return false;
 }
 
+// Whether the try is the terminate scope that wraps the body of a function
+// that cannot throw: its only handler is a catch-all that terminates.
+static bool isTerminateScope(cir::TryOp tryOp) {
+  mlir::ArrayAttr handlers = tryOp.getHandlerTypesAttr();
+  if (!handlers || handlers.size() != 1 || !isa<cir::CatchAllAttr>(handlers[0]))
+    return false;
+  mlir::Block &handlerEntry = tryOp.getHandlerRegions().front().front();
+  return !handlerEntry.empty() && isa<cir::EhTerminateOp>(handlerEntry.front());
+}
+
+// Whether an exception escaping this operation is bound for std::terminate:
+// the nearest try that protects it is a terminate scope, and anything in
+// between is a cleanup.
+static bool unwindsToTerminate(mlir::Operation *op) {
+  for (mlir::Region *region = op->getParentRegion(); region;
+       region = region->getParentRegion()) {
+    mlir::Operation *parent = region->getParentOp();
+    if (!parent || isa<cir::FuncOp>(parent) ||
+        !isa_and_present<cir::CIRDialect>(parent->getDialect()))
+      return false;
+    if (auto tryOp = dyn_cast<cir::TryOp>(parent)) {
+      mlir::ArrayAttr handlers = tryOp.getHandlerTypesAttr();
+      if (region == &tryOp.getTryRegion() && handlers && !handlers.empty())
+        return isTerminateScope(tryOp);
+    }
+  }
+  return false;
+}
+
 // Collect all function calls in a region that may throw exceptions and need
 // to be replaced with try_call operations. Skips calls marked nothrow.
 // Nested cleanup scopes and try ops are always flattened before their
@@ -1483,7 +1512,7 @@ public:
   // a branch to a catch dispatch block. Otherwise, the cir.resume operation
   // remains in place and will unwind to the caller.
   mlir::LogicalResult
-  flattenCleanup(cir::CleanupScopeOp cleanupOp,
+  flattenCleanup(cir::CleanupScopeOp cleanupOp, bool hasEHCleanup,
                  llvm::SmallVectorImpl<CleanupExit> &exits,
                  llvm::SmallVectorImpl<cir::CallOp> &callsToRewrite,
                  llvm::SmallVectorImpl<cir::ThrowOp> &throwsToRewrite,
@@ -1492,7 +1521,6 @@ public:
     mlir::Location loc = cleanupOp.getLoc();
     cir::CleanupKindAttr cleanupKind = cleanupOp.getCleanupKindAttr();
     bool hasNormalCleanup = cleanupKind.isNormal();
-    bool hasEHCleanup = cleanupKind.isEH();
     bool isMultiExit = exits.size() > 1;
 
     // If every exit from the body is a musttail return, nothing reaches the
@@ -1763,7 +1791,12 @@ public:
     if (hasNestedOpsToFlatten(cleanupOp.getBodyRegion()))
       return mlir::failure();
 
-    bool hasEHCleanup = cleanupOp.getCleanupKindAttr().isEH();
+    // Whether cleanups run on the way to std::terminate is
+    // implementation-defined (C++ [except.terminate]). Like classic codegen,
+    // skip them, so that calls in the body unwind straight to the terminate
+    // scope.
+    bool hasEHCleanup =
+        cleanupOp.getCleanupKindAttr().isEH() && !unwindsToTerminate(cleanupOp);
 
     // Collect all exits from the body region.
     llvm::SmallVector<CleanupExit> exits;
@@ -1798,8 +1831,8 @@ public:
     if (hasEHCleanup)
       collectResumeOps(cleanupOp.getBodyRegion(), resumeOpsToChain);
 
-    return flattenCleanup(cleanupOp, exits, callsToRewrite, throwsToRewrite,
-                          resumeOpsToChain, rewriter);
+    return flattenCleanup(cleanupOp, hasEHCleanup, exits, callsToRewrite,
+                          throwsToRewrite, resumeOpsToChain, rewriter);
   }
 };
 

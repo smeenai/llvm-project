@@ -204,3 +204,30 @@ void outer() noexcept {
 // OGCG-NEXT:    unreachable
 
 // LLVM-NOT:     resume
+
+struct Guard {
+  Guard();
+  ~Guard();
+};
+
+void guarded() noexcept {
+  Guard g;
+  external();
+}
+
+// It is implementation-defined whether cleanups run before std::terminate,
+// and neither pipeline runs them: the terminate landing pad doesn't destroy g.
+// LLVM-LABEL: define{{.*}} void @_Z7guardedv()
+// LLVM-SAME: personality ptr @__gxx_personality_v0
+// LLVMCIR:      invoke void @_ZN5GuardC1Ev(
+// LLVMCIR:      invoke void @_Z8externalv()
+// LLVMCIR:      call void @_ZN5GuardD1Ev(
+// LLVMCIR:      landingpad { ptr, i32 }
+// LLVMCIR-NEXT:         catch ptr null
+// LLVMCIR-NOT:  @_ZN5GuardD1Ev
+// LLVMCIR:      call void @__clang_call_terminate(
+// OGCG:         call unwindabort void @_ZN5GuardC1Ev(
+// OGCG:         call unwindabort void @_Z8externalv()
+// OGCG:         call void @_ZN5GuardD1Ev(
+// OGCG-NOT:     landingpad
+// OGCG:         ret void
