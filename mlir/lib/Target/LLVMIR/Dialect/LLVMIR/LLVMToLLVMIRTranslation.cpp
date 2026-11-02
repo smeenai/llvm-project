@@ -524,6 +524,8 @@ convertOperationImpl(Operation &opInst, llvm::IRBuilderBase &builder,
     }
     call->setCallingConv(convertCConvToLLVM(callOp.getCConv()));
     call->setTailCallKind(convertTailCallKindToLLVM(callOp.getTailCallKind()));
+    if (callOp.getUnwindAbortAttr())
+      call->setUnwindAbort();
     if (callOp.getConvergentAttr())
       call->addFnAttr(llvm::Attribute::Convergent);
     if (callOp.getNoUnwindAttr())

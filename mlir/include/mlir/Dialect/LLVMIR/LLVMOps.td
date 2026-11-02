@@ -869,6 +869,11 @@ def LLVM_CallOp
     attribute. The `inline_hint` attribute indicates that it is desirable to inline
     this function call.
 
+    The `unwind_abort` attribute corresponds to LLVM's `call unwindabort`: if
+    an exception unwinds out of the callee, the personality function aborts
+    the process instead of continuing to unwind to the caller. The enclosing
+    function must have a personality.
+
     Examples:
 
     ```mlir
@@ -916,7 +921,7 @@ def LLVM_CallOp
       OptionalAttr<ArrayAttr>:$op_bundle_tags,
       OptionalAttr<DictArrayAttr>:$arg_attrs,
       OptionalAttr<DictArrayAttr>:$res_attrs, UnitAttr:$no_inline,
-      UnitAttr:$always_inline, UnitAttr:$inline_hint);
+      UnitAttr:$always_inline, UnitAttr:$inline_hint, UnitAttr:$unwind_abort);
   // Append the aliasing related attributes defined in LLVM_MemAccessOpBase.
   let arguments = !con(args, aliasAttrs);
   let results = (outs Optional<LLVM_Type>:$result);

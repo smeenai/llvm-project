@@ -3340,6 +3340,18 @@ llvm.func @noreturn_call() {
 // -----
 
 llvm.func @f()
+llvm.func @__gxx_personality_v0(...) -> i32
+
+// CHECK-LABEL: @unwind_abort_call
+// CHECK: call unwindabort void @f()
+llvm.func @unwind_abort_call() attributes { personality = @__gxx_personality_v0 } {
+  llvm.call @f() {unwind_abort} : () -> ()
+  llvm.return
+}
+
+// -----
+
+llvm.func @f()
 
 // CHECK-LABEL: @no_inline_call
 // CHECK: call void @f() #[[ATTRS:[0-9]+]]

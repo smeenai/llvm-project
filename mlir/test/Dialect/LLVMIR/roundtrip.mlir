@@ -122,6 +122,9 @@ func.func @ops(%arg0: i32, %arg1: f32,
 // CHECK: llvm.call @baz() {will_return} : () -> ()
   llvm.call @baz() {will_return} : () -> ()
 
+// CHECK: llvm.call @baz() {unwind_abort} : () -> ()
+  llvm.call @baz() {unwind_abort} : () -> ()
+
 // CHECK: llvm.call @baz() {noreturn} : () -> ()
   llvm.call @baz() {noreturn} : () -> ()
 

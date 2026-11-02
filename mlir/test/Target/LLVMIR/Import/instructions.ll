@@ -739,6 +739,19 @@ define void @call_no_unwind() {
 
 ; CHECK: llvm.func @f()
 declare void @f()
+declare i32 @__gxx_personality_v0(...)
+
+; CHECK-LABEL: @call_unwind_abort
+define void @call_unwind_abort() personality ptr @__gxx_personality_v0 {
+; CHECK: llvm.call @f() {unwind_abort}
+  call unwindabort void @f()
+  ret void
+}
+
+; // -----
+
+; CHECK: llvm.func @f()
+declare void @f()
 
 ; CHECK-LABEL: @call_will_return
 define void @call_will_return() {

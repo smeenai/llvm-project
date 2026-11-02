@@ -3352,6 +3352,7 @@ LogicalResult ModuleImport::convertCallAttributes(llvm::CallInst *inst,
   llvm::AttributeList callAttrs = inst->getAttributes();
 
   op.setTailCallKind(convertTailCallKindFromLLVM(inst->getTailCallKind()));
+  op.setUnwindAbort(inst->isUnwindAbort());
   op.setConvergent(callAttrs.getFnAttr(llvm::Attribute::Convergent).isValid());
   op.setNoUnwind(callAttrs.getFnAttr(llvm::Attribute::NoUnwind).isValid());
   op.setWillReturn(callAttrs.getFnAttr(llvm::Attribute::WillReturn).isValid());

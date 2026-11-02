@@ -694,6 +694,12 @@ struct LLVMInlinerInterface : public DialectInlinerInterface {
       LDBG() << "Cannot inline: call is marked no_inline";
       return false;
     }
+    // TODO: Mark the inlined calls unwind_abort, which they would need to keep
+    // an exception from unwinding past this call site.
+    if (callOp.getUnwindAbort()) {
+      LDBG() << "Cannot inline: call is marked unwind_abort";
+      return false;
+    }
     auto funcOp = dyn_cast<LLVM::LLVMFuncOp>(callable);
     if (!funcOp) {
       LDBG() << "Cannot inline: callable is not an '"

@@ -1041,7 +1041,8 @@ void CallOp::build(OpBuilder &builder, OperationState &state, TypeRange results,
         /*access_groups=*/nullptr, /*alias_scopes=*/nullptr,
         /*noalias_scopes=*/nullptr, /*tbaa=*/nullptr,
         /*no_inline=*/nullptr, /*always_inline=*/nullptr,
-        /*inline_hint=*/nullptr);
+        /*inline_hint=*/nullptr,
+        /*unwind_abort=*/nullptr);
 }
 
 void CallOp::build(OpBuilder &builder, OperationState &state,
@@ -1082,7 +1083,8 @@ void CallOp::build(OpBuilder &builder, OperationState &state,
         /*access_groups=*/nullptr,
         /*alias_scopes=*/nullptr, /*noalias_scopes=*/nullptr, /*tbaa=*/nullptr,
         /*no_inline=*/nullptr, /*always_inline=*/nullptr,
-        /*inline_hint=*/nullptr);
+        /*inline_hint=*/nullptr,
+        /*unwind_abort=*/nullptr);
 }
 
 void CallOp::build(OpBuilder &builder, OperationState &state,
@@ -1109,7 +1111,8 @@ void CallOp::build(OpBuilder &builder, OperationState &state,
         /*access_groups=*/nullptr, /*alias_scopes=*/nullptr,
         /*noalias_scopes=*/nullptr, /*tbaa=*/nullptr,
         /*no_inline=*/nullptr, /*always_inline=*/nullptr,
-        /*inline_hint=*/nullptr);
+        /*inline_hint=*/nullptr,
+        /*unwind_abort=*/nullptr);
 }
 
 void CallOp::build(OpBuilder &builder, OperationState &state, LLVMFuncOp func,
@@ -1136,7 +1139,8 @@ void CallOp::build(OpBuilder &builder, OperationState &state, LLVMFuncOp func,
         /*arg_attrs=*/nullptr, /*res_attrs=*/nullptr,
         /*noalias_scopes=*/nullptr, /*tbaa=*/nullptr,
         /*no_inline=*/nullptr, /*always_inline=*/nullptr,
-        /*inline_hint=*/nullptr);
+        /*inline_hint=*/nullptr,
+        /*unwind_abort=*/nullptr);
 }
 
 CallInterfaceCallable CallOp::getCallableForCallee() {
@@ -1298,7 +1302,11 @@ static LogicalResult verifyOperandBundles(OpType &op) {
   return success();
 }
 
-LogicalResult CallOp::verify() { return verifyOperandBundles(*this); }
+LogicalResult CallOp::verify() {
+  if (getUnwindAbort() && getTailCallKind() == TailCallKind::MustTail)
+    return emitOpError("cannot be both 'musttail' and 'unwind_abort'");
+  return verifyOperandBundles(*this);
+}
 
 template <typename OpTy>
 static LogicalResult

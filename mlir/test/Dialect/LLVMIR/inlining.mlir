@@ -161,6 +161,25 @@ llvm.func @caller() {
 
 // -----
 
+llvm.func @throws()
+llvm.func @__gxx_personality_v0(...) -> i32
+
+llvm.func @callee() {
+  llvm.call @throws() : () -> ()
+  llvm.return
+}
+
+// An exception from @throws would unwind past @caller if @callee were inlined.
+// CHECK-LABEL: llvm.func @caller
+// CHECK-NEXT: llvm.call @callee() {unwind_abort}
+// CHECK-NEXT: llvm.return
+llvm.func @caller() attributes { personality = @__gxx_personality_v0 } {
+  llvm.call @callee() {unwind_abort} : () -> ()
+  llvm.return
+}
+
+// -----
+
 llvm.func @callee_noinline() attributes { no_inline } {
   llvm.return
 }

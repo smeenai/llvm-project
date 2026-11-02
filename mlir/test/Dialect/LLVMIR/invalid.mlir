@@ -2632,3 +2632,12 @@ llvm.func @nvvm_duplicate_fp_modifier(%a: f32, %b: f32) {
 // expected-error@+1 {{failed to parse LoopAnnotationAttr parameter 'align' which is to be a `uint32_t`}}
 #loop_align_too_large = #llvm.loop_annotation<align = 4294967296>
 
+// -----
+
+llvm.func @f()
+
+llvm.func @musttail_unwind_abort() {
+  // expected-error@+1 {{cannot be both 'musttail' and 'unwind_abort'}}
+  llvm.call musttail @f() {unwind_abort} : () -> ()
+  llvm.return
+}
