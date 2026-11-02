@@ -10,11 +10,9 @@
 //
 // The lowering must:
 //   - At each use, insert `__cxa_get_exception_ptr` + bitcast and clone the
-//     thunk's body in place; any potentially-throwing `cir.call` becomes a
-//     `cir.try_call` whose unwind path runs `__clang_call_terminate`
-//     (Itanium's terminate scope around the catch-parameter copy). The
-//     terminate block is appended at the end of the function as a cold
-//     landing pad.
+//     thunk's body in place; any potentially-throwing `cir.call` is marked
+//     `unwindabort` (Itanium's terminate scope around the catch-parameter
+//     copy).
 //   - Drop any catch-copy thunks that end up uncalled after lowering.
 
 !s8i = !cir.int<s, 8>
@@ -96,27 +94,21 @@ cir.func @test_basic_construct_catch() {
 // CHECK:         cir.eh.inflight_exception [@_ZTI1E]
 //
 // Catch-handler entry: __cxa_get_exception_ptr + bitcast, then the inlined
-// thunk body. The plain (potentially-throwing) ctor call must become a
-// cir.try_call whose unwind destination runs __clang_call_terminate.
+// thunk body. The plain (potentially-throwing) ctor call must be marked
+// unwindabort.
 // CHECK:         %[[ADJUSTED_RAW:.*]] = cir.call @__cxa_get_exception_ptr(%{{.*}}) nothrow
 // CHECK:         %[[ADJUSTED:.*]] = cir.cast bitcast %[[ADJUSTED_RAW]] : !cir.ptr<!u8i> -> !cir.ptr<!rec_E>
-// CHECK:         cir.try_call @_ZN1EC1ERKS_(%{{.*}}, %[[ADJUSTED]]) ^{{bb[0-9]+}}, ^[[TERMINATE:bb[0-9]+]]
+// CHECK:         cir.call @_ZN1EC1ERKS_(%{{.*}}, %[[ADJUSTED]]) unwindabort
 //
-// Normal continuation of the catch handler runs begin_catch, the user's
-// destructor call, and end_catch.
+// Then the catch handler runs begin_catch, the user's destructor call, and
+// end_catch.
 // CHECK:         cir.call @__cxa_begin_catch
 // CHECK:         cir.call @_ZN1ED1Ev
 // CHECK:         cir.call @__cxa_end_catch()
 //
 // CHECK:       ^[[RETURN]]:
 // CHECK:         cir.return
-//
-// Terminate scope appended at the end of the function: control reaches it
-// only if the catch-parameter copy throws.
-// CHECK:       ^[[TERMINATE]]:
-// CHECK:         %[[T_EXN:.*]], %{{.*}} = cir.eh.inflight_exception catch_all
-// CHECK:         cir.call @__clang_call_terminate(%[[T_EXN]]){{.*}}noreturn
-// CHECK:         cir.unreachable
+// CHECK-NOT:     cir.eh.inflight_exception catch_all
 
 //===----------------------------------------------------------------------===//
 // Case 2: two callers share a single thunk.
@@ -185,14 +177,14 @@ cir.func @test_shared_thunk_caller_b() {
 }
 
 // Both callers should have the body inlined: each gets its own
-// __cxa_get_exception_ptr / try_call to the actual ctor.
+// __cxa_get_exception_ptr / unwindabort call to the actual ctor.
 // CHECK-LABEL: cir.func @test_shared_thunk_caller_a()
 // CHECK:         cir.call @__cxa_get_exception_ptr
-// CHECK:         cir.try_call @_ZN1EC1ERKS_
+// CHECK:         cir.call @_ZN1EC1ERKS_({{.*}}) unwindabort
 
 // CHECK-LABEL: cir.func @test_shared_thunk_caller_b()
 // CHECK:         cir.call @__cxa_get_exception_ptr
-// CHECK:         cir.try_call @_ZN1EC1ERKS_
+// CHECK:         cir.call @_ZN1EC1ERKS_({{.*}}) unwindabort
 
 //===----------------------------------------------------------------------===//
 // Case 3: a thunk-tagged function with no caller is erased outright.
@@ -213,6 +205,6 @@ cir.func linkonce_odr hidden @__clang_cir_catch_copy__ZTS1E_unused(
 
 // Module-level runtime helper declarations introduced by the lowering.
 // CHECK: cir.func private @__cxa_get_exception_ptr(!cir.ptr<!void>) -> !cir.ptr<!u8i>
-// CHECK: cir.func {{.*}} @__clang_call_terminate(%{{.*}}: !cir.ptr<!void>) attributes {noreturn}
+// CHECK-NOT: @__clang_call_terminate
 
 }

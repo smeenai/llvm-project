@@ -1511,13 +1511,8 @@ void while_cond_var_extended_throwing_last() {
 // LLVM:         landingpad { ptr, i32 }
 // LLVM-NEXT:            cleanup
 // LLVM:         call void @_ZN18ThrowingDtorHolderD1Ev(ptr {{.*}} %[[H]])
-// LLVM:         invoke void @_ZN12ThrowingDtorD1Ev(ptr {{.*}} %[[TMP]])
-// LLVM-NEXT:            to label %{{.*}} unwind label %[[TERMINATE:.*]]
+// LLVM:         call unwindabort void @_ZN12ThrowingDtorD1Ev(ptr {{.*}} %[[TMP]])
 // LLVM:         resume { ptr, i32 }
-// LLVM:       [[TERMINATE]]:
-// LLVM-NEXT:    landingpad { ptr, i32 }
-// LLVM-NEXT:            catch ptr null
-// LLVM:         call void @__clang_call_terminate(
 
 // OGCG-LABEL: define dso_local void @_Z37while_cond_var_extended_throwing_lastv() {{.*}} personality ptr @__gxx_personality_v0 {
 // OGCG:       lpad:

@@ -136,8 +136,9 @@ cir.func @nested_try_in_filter() {
 // CHECK:         cir.return
 
 // void target() noexcept
-// A terminate scope catches everything, so its dispatch has no type test and
-// no continue-unwinding edge.
+// An exception escaping a call in a terminate scope terminates whatever its
+// type, so the call is marked unwindabort rather than given an unwind edge,
+// and the handler goes away.
 cir.func @terminate_scope() {
   cir.try {
     cir.call @_Z8externalv() : () -> ()
@@ -149,24 +150,13 @@ cir.func @terminate_scope() {
 }
 
 // CHECK-LABEL: cir.func @terminate_scope()
-// CHECK:         cir.try_call @_Z8externalv() ^[[NORMAL:bb[0-9]+]], ^[[UNWIND:bb[0-9]+]]
-// CHECK:       ^[[NORMAL]]:
-// CHECK:         cir.br ^[[CONTINUE:bb[0-9]+]]
-// CHECK:       ^[[UNWIND]]:
-// CHECK:         %[[EH:.*]] = cir.eh.initiate : !cir.eh_token
-// CHECK:         cir.br ^[[DISPATCH:bb[0-9]+]](%[[EH]] : !cir.eh_token)
-// CHECK:       ^[[DISPATCH]](%[[DT:.*]]: !cir.eh_token):
-// CHECK:         cir.eh.dispatch %[[DT]] : !cir.eh_token [
-// CHECK-NEXT:      catch_all : ^[[TERMINATE:bb[0-9]+]]
-// CHECK-NEXT:    ]
-// CHECK:       ^[[TERMINATE]](%[[TT:.*]]: !cir.eh_token):
-// CHECK:         cir.eh.terminate %[[TT]] : !cir.eh_token
-// CHECK:       ^[[CONTINUE]]:
+// CHECK:         cir.call @_Z8externalv() unwindabort : () -> ()
+// CHECK-NOT:     cir.eh
 // CHECK:         cir.return
 
 // void target() noexcept { Guard g; external(); }
 // Cleanups on the way to std::terminate are skipped, so the cleanup scope keeps
-// only its normal path, and the call unwinds straight to the terminate handler.
+// only its normal path, and the call is marked unwindabort.
 cir.func @cleanup_in_terminate_scope() {
   cir.try {
     cir.cleanup.scope {
@@ -184,16 +174,41 @@ cir.func @cleanup_in_terminate_scope() {
 }
 
 // CHECK-LABEL: cir.func @cleanup_in_terminate_scope()
-// CHECK:         cir.try_call @_Z8externalv() ^[[NORMAL:bb[0-9]+]], ^[[UNWIND:bb[0-9]+]]
-// CHECK:       ^[[NORMAL]]:
+// CHECK:         cir.call @_Z8externalv() unwindabort : () -> ()
 // CHECK:         cir.call @_Z5innerv() nothrow : () -> ()
+// CHECK-NOT:     cir.eh
 // CHECK-NOT:     cir.begin_cleanup
+// CHECK:         cir.return
+
+// void target() noexcept { try { inner(); } catch (...) { external(); } }
+// The try's handler is not protected by the try itself, so the call in it is
+// bound for the terminate scope, while the call in the try body still unwinds
+// to the handler.
+cir.func @try_in_terminate_scope() {
+  cir.try {
+    cir.try {
+      cir.call @_Z5innerv() : () -> ()
+      cir.yield
+    } catch all (%eh_token : !cir.eh_token) {
+      %ct, %exn = cir.begin_catch %eh_token
+          : !cir.eh_token -> (!cir.catch_token, !cir.ptr<!void>)
+      cir.call @_Z8externalv() : () -> ()
+      cir.end_catch %ct : !cir.catch_token
+      cir.yield
+    }
+    cir.yield
+  } catch all (%eh_token.1 : !cir.eh_token) {
+    cir.eh.terminate %eh_token.1 : !cir.eh_token
+  }
+  cir.return
+}
+
+// CHECK-LABEL: cir.func @try_in_terminate_scope()
+// CHECK:         cir.try_call @_Z5innerv() ^{{bb[0-9]+}}, ^[[UNWIND:bb[0-9]+]]
 // CHECK:       ^[[UNWIND]]:
-// CHECK-NEXT:    %[[EH:.*]] = cir.eh.initiate : !cir.eh_token
-// CHECK-NEXT:    cir.br ^[[DISPATCH:bb[0-9]+]](%[[EH]] : !cir.eh_token)
-// CHECK:       ^[[DISPATCH]](%[[DT:.*]]: !cir.eh_token):
-// CHECK:         cir.eh.dispatch %[[DT]] : !cir.eh_token [
-// CHECK-NEXT:      catch_all : ^[[TERMINATE:bb[0-9]+]]
-// CHECK-NEXT:    ]
-// CHECK:       ^[[TERMINATE]](%[[TT:.*]]: !cir.eh_token):
-// CHECK-NEXT:    cir.eh.terminate %[[TT]] : !cir.eh_token
+// CHECK:         cir.eh.initiate : !cir.eh_token
+// CHECK:         cir.begin_catch
+// CHECK-NEXT:    cir.call @_Z8externalv() unwindabort : () -> ()
+// CHECK-NEXT:    cir.end_catch
+// CHECK-NOT:     cir.eh.terminate
+// CHECK:         cir.return

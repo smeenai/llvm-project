@@ -156,16 +156,15 @@ int test_non_trivial_exception_copy() {
 // CIR-AFTER-EHABI:         %[[T1E_EQ:.*]] = cir.cmp eq %{{.*}}, %[[T1E_TYPEID]] : !u32i
 // CIR-AFTER-EHABI:         cir.brcond %[[T1E_EQ]] ^[[T1E_CATCH:bb[0-9]+]](%{{.*}}, %{{.*}} : !cir.ptr<!void>, !u32i), ^[[T1E_RESUME:bb[0-9]+]](%{{.*}}, %{{.*}} : !cir.ptr<!void>, !u32i)
 
-// In the catch block: get the adjusted exception pointer, then invoke the
-// inlined copy ctor directly. The normal-edge target is a pure-fallthrough
-// block that we don't pin; the unwind-edge target is the terminate handler.
+// In the catch block: get the adjusted exception pointer, then call the
+// inlined copy ctor directly. An exception escaping the copy terminates, so
+// the call is marked unwindabort.
 // CIR-AFTER-EHABI:       ^[[T1E_CATCH]](%[[T1E_RAW:.*]]: !cir.ptr<!void>, %{{.*}}: !u32i):
 // CIR-AFTER-EHABI:         %[[T1E_ADJ:.*]] = cir.call @__cxa_get_exception_ptr(%[[T1E_RAW]]) nothrow : (!cir.ptr<!void>) -> !cir.ptr<!u8i>
 // CIR-AFTER-EHABI:         %[[T1E_ADJT:.*]] = cir.cast bitcast %[[T1E_ADJ]] : !cir.ptr<!u8i> -> !cir.ptr<!rec_MyException>
-// CIR-AFTER-EHABI:         cir.try_call @_ZN11MyExceptionC1ERKS_(%{{.*}}, %[[T1E_ADJT]]) ^{{bb[0-9]+}}, ^[[T1E_TERM:bb[0-9]+]]
+// CIR-AFTER-EHABI:         cir.call @_ZN11MyExceptionC1ERKS_(%{{.*}}, %[[T1E_ADJT]]) unwindabort
 
-// On the inlined copy's normal-edge fallthrough chain: __cxa_begin_catch and
-// run the catch body.
+// Then __cxa_begin_catch, and run the catch body.
 // CIR-AFTER-EHABI:         cir.call @__cxa_begin_catch(%[[T1E_RAW]]) : (!cir.ptr<!void>) -> !cir.ptr<!u8i>
 // CIR-AFTER-EHABI:         cir.try_call @_ZN11MyException3getEv(%{{.*}}) ^[[T1E_GET_OK:bb[0-9]+]], ^[[T1E_GET_LPAD:bb[0-9]+]]
 
@@ -187,13 +186,7 @@ int test_non_trivial_exception_copy() {
 // CIR-AFTER-EHABI:         cir.resume.flat %{{.*}}, %{{.*}}
 
 // CIR-AFTER-EHABI:         cir.return %{{.*}} : !s32i
-
-// Terminate landing pad.
-// CIR-AFTER-EHABI:       ^[[T1E_TERM]]:
-// CIR-AFTER-EHABI:         %{{.*}}, %{{.*}} = cir.eh.inflight_exception catch_all
-// CIR-AFTER-EHABI:         cir.call @__clang_call_terminate(%{{.*}}) nothrow {noreturn} : (!cir.ptr<!void>) -> ()
-// CIR-AFTER-EHABI:         cir.unreachable
-
+// CIR-AFTER-EHABI-NOT:     cir.eh.inflight_exception catch_all
 
 // The catch-copy thunk is fully inlined and removed by the post-lowering
 // sweep, so it is no longer present at this stage.
@@ -215,15 +208,13 @@ int test_non_trivial_exception_copy() {
 // LLVM:         br i1 %[[T1L_MATCH]], label %[[T1L_CATCH:.*]], label %[[T1L_RESUME:.*]]
 
 // Catch handler: __cxa_get_exception_ptr followed by the inlined copy ctor
-// invoke (the catch-copy thunk has been inlined away, so the ctor is called
-// directly with a terminate landing pad). The normal-edge target is a
-// pure-fallthrough block that we don't pin.
+// call (the catch-copy thunk has been inlined away, so the ctor is called
+// directly, marked unwindabort).
 // LLVM:       [[T1L_CATCH]]:
 // LLVM:         %[[T1L_ADJ:.*]] = call ptr @__cxa_get_exception_ptr(
-// LLVM:         invoke void @_ZN11MyExceptionC1ERKS_(ptr {{.*}}, ptr{{.*}} %[[T1L_ADJ]])
-// LLVM:                 to label %{{.*}} unwind label %[[T1L_TERM:.*]]
+// LLVM:         call unwindabort void @_ZN11MyExceptionC1ERKS_(ptr {{.*}}, ptr{{.*}} %[[T1L_ADJ]])
 
-// On the inlined copy's normal-edge fallthrough chain: __cxa_begin_catch.
+// Then __cxa_begin_catch.
 // LLVM:         call ptr @__cxa_begin_catch(
 // LLVM:         invoke noundef i32 @_ZN11MyException3getEv(
 // LLVM:                 to label %[[T1L_GET_OK:.*]] unwind label %[[T1L_GET_LPAD:.*]]
@@ -243,12 +234,7 @@ int test_non_trivial_exception_copy() {
 // LLVM:       [[T1L_RESUME]]:
 // LLVM:         resume { ptr, i32 }
 // LLVM:         ret i32
-
-// LLVM:       [[T1L_TERM]]:
-// LLVM:         landingpad { ptr, i32 }
-// LLVM:                 catch ptr null
-// LLVM:         call void @__clang_call_terminate(
-// LLVM:         unreachable
+// LLVM-NOT:     __clang_call_terminate
 
 // The catch-copy thunk is inlined away during EHABI lowering, so it should
 // not appear in the LLVM IR.
@@ -400,17 +386,16 @@ int test_copy_ctor_extra_args() {
 // CIR-AFTER-EHABI:         cir.brcond %[[T2E_EQ]] ^[[T2E_CATCH:bb[0-9]+]](%{{.*}}, %{{.*}} : !cir.ptr<!void>, !u32i), ^[[T2E_RESUME:bb[0-9]+]](%{{.*}}, %{{.*}} : !cir.ptr<!void>, !u32i)
 
 // In the catch block: get the adjusted exception pointer, materialize the
-// `42` default argument, and invoke the inlined copy ctor directly. The
-// thunk has been inlined into the catch handler, so the constant comes from
-// the cloned thunk body. The normal-edge target is a pure-fallthrough block
-// that we don't pin; the unwind-edge target is the terminate handler.
+// `42` default argument, and call the inlined copy ctor directly, marked
+// unwindabort. The thunk has been inlined into the catch handler, so the
+// constant comes from the cloned thunk body.
 // CIR-AFTER-EHABI:       ^[[T2E_CATCH]](%[[T2E_RAW:.*]]: !cir.ptr<!void>, %{{.*}}: !u32i):
 // CIR-AFTER-EHABI:         %[[T2E_ADJ:.*]] = cir.call @__cxa_get_exception_ptr(%[[T2E_RAW]]) nothrow
 // CIR-AFTER-EHABI:         %[[T2E_ADJT:.*]] = cir.cast bitcast %[[T2E_ADJ]] : !cir.ptr<!u8i> -> !cir.ptr<!rec_WithDefault>
 // CIR-AFTER-EHABI:         %[[T2E_FORTYTWO:.*]] = cir.const #cir.int<42> : !s32i
-// CIR-AFTER-EHABI:         cir.try_call @_ZN11WithDefaultC1ERKS_i(%{{.*}}, %[[T2E_ADJT]], %[[T2E_FORTYTWO]]) ^{{bb[0-9]+}}, ^[[T2E_TERM:bb[0-9]+]]
+// CIR-AFTER-EHABI:         cir.call @_ZN11WithDefaultC1ERKS_i(%{{.*}}, %[[T2E_ADJT]], %[[T2E_FORTYTWO]]) unwindabort
 
-// On the inlined copy's normal-edge fallthrough chain: __cxa_begin_catch.
+// Then __cxa_begin_catch.
 // CIR-AFTER-EHABI:         cir.call @__cxa_begin_catch(%[[T2E_RAW]])
 
 // Catch body and dispatch out via cleanup_dest_slot.
@@ -424,11 +409,7 @@ int test_copy_ctor_extra_args() {
 // CIR-AFTER-EHABI:         cir.resume.flat %{{.*}}, %{{.*}}
 
 // CIR-AFTER-EHABI:         cir.return %{{.*}} : !s32i
-
-// Terminate landing pad.
-// CIR-AFTER-EHABI:       ^[[T2E_TERM]]:
-// CIR-AFTER-EHABI:         cir.eh.inflight_exception catch_all
-// CIR-AFTER-EHABI:         cir.call @__clang_call_terminate(
+// CIR-AFTER-EHABI-NOT:     cir.eh.inflight_exception catch_all
 
 // The catch-copy thunk is fully inlined and removed.
 // CIR-AFTER-EHABI-NOT: @__clang_cir_catch_copy__ZTS11WithDefault
@@ -449,10 +430,9 @@ int test_copy_ctor_extra_args() {
 
 // LLVM:       [[T2L_CATCH]]:
 // LLVM:         %[[T2L_ADJ:.*]] = call ptr @__cxa_get_exception_ptr(
-// LLVM:         invoke void @_ZN11WithDefaultC1ERKS_i(ptr {{.*}}, ptr {{.*}} %[[T2L_ADJ]], i32 {{.*}} 42)
-// LLVM:                 to label %{{.*}} unwind label %[[T2L_TERM:.*]]
+// LLVM:         call unwindabort void @_ZN11WithDefaultC1ERKS_i(ptr {{.*}}, ptr {{.*}} %[[T2L_ADJ]], i32 {{.*}} 42)
 
-// On the inlined copy's normal-edge fallthrough chain: __cxa_begin_catch.
+// Then __cxa_begin_catch.
 // LLVM:         call ptr @__cxa_begin_catch(
 
 // LLVM:         call void @_ZN11WithDefaultD1Ev(
@@ -464,12 +444,7 @@ int test_copy_ctor_extra_args() {
 // LLVM:       [[T2L_RESUME]]:
 // LLVM:         resume { ptr, i32 }
 // LLVM:         ret i32
-
-// LLVM:       [[T2L_TERM]]:
-// LLVM:         landingpad { ptr, i32 }
-// LLVM:                 catch ptr null
-// LLVM:         call void @__clang_call_terminate(
-// LLVM:         unreachable
+// LLVM-NOT:     __clang_call_terminate
 
 // The catch-copy thunk is inlined away; no separate function definition.
 // LLVM-NOT: @__clang_cir_catch_copy__ZTS11WithDefault
@@ -519,5 +494,4 @@ int test_copy_ctor_extra_args() {
 // CIR-AFTER-EHABI: cir.func private @__cxa_begin_catch(
 // CIR-AFTER-EHABI: cir.func private @__cxa_end_catch()
 // CIR-AFTER-EHABI: cir.func private @__cxa_get_exception_ptr(
-// CIR-AFTER-EHABI: cir.func linkonce_odr hidden @__clang_call_terminate(
-// CIR-AFTER-EHABI: cir.func private @_ZSt9terminatev()
+// CIR-AFTER-EHABI-NOT: @__clang_call_terminate

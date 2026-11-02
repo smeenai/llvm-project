@@ -1505,6 +1505,11 @@ static mlir::ParseResult parseCallCommon(mlir::OpAsmParser &parser,
     result.addAttribute(CIRDialect::getWillReturnAttrName(),
                         mlir::UnitAttr::get(parser.getContext()));
 
+  if (!hasDestinationBlocks &&
+      parser.parseOptionalKeyword("unwindabort").succeeded())
+    result.addAttribute(CIRDialect::getUnwindAbortAttrName(),
+                        mlir::UnitAttr::get(parser.getContext()));
+
   llvm::SMLoc attrsLoc = parser.getCurrentLocation();
   if (parser.parseOptionalAttrDict(result.attributes))
     return ::mlir::failure();
@@ -1612,6 +1617,9 @@ static void printCallCommon(mlir::Operation *op,
   if (op->hasAttr(CIRDialect::getWillReturnAttrName()))
     printer << " willreturn";
 
+  if (op->hasAttr(CIRDialect::getUnwindAbortAttrName()))
+    printer << " unwindabort";
+
   llvm::StringRef elidedAttrs[] = {
       CIRDialect::getCalleeAttrName(),
       CIRDialect::getCallingConvAttrName(),
@@ -1619,6 +1627,7 @@ static void printCallCommon(mlir::Operation *op,
       CIRDialect::getNoThrowAttrName(),
       CIRDialect::getNoUnwindAttrName(),
       CIRDialect::getWillReturnAttrName(),
+      CIRDialect::getUnwindAbortAttrName(),
       CIRDialect::getOperandSegmentSizesAttrName(),
       "res_attrs",
       "arg_attrs",

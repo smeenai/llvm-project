@@ -947,7 +947,8 @@ static bool unwindsToTerminate(mlir::Operation *op) {
 }
 
 // Collect all function calls in a region that may throw exceptions and need
-// to be replaced with try_call operations. Skips calls marked nothrow.
+// to be replaced with try_call operations. Skips calls marked nothrow, and
+// calls marked unwindabort, which never unwind into the enclosing scope.
 // Nested cleanup scopes and try ops are always flattened before their
 // enclosing parents, so there are no nested regions to skip here.
 static void
@@ -957,7 +958,8 @@ collectThrowingCalls(mlir::Region &region,
     // A musttail call is never an invoke. LLVM has no musttail invoke, and
     // the tail call replaces the frame the cleanup would have run in, so
     // there is nothing left to unwind through.
-    if (!callOp.getNothrow() && !callOp.getMusttail())
+    if (!callOp.getNothrow() && !callOp.getMusttail() &&
+        !callOp.getUnwindabort())
       callsToRewrite.push_back(callOp);
   });
 }
@@ -1712,8 +1714,8 @@ public:
     // Handle throwing calls and throws in EH cleanup blocks. When an
     // exception is thrown during cleanup code that runs on the exception
     // unwind path, the C++ standard requires that std::terminate() be
-    // called. Replace such calls and throws with try_call/try_throw
-    // operations that unwind to a terminate block containing
+    // called. Mark such calls unwindabort, and replace such throws with
+    // try_throw operations that unwind to a terminate block containing
     // cir.eh.initiate + cir.eh.terminate.
     if (ehCleanupEntry) {
       llvm::SmallVector<cir::CallOp> ehCleanupThrowingCalls;
@@ -1729,11 +1731,11 @@ public:
           }
         });
       }
-      if (!ehCleanupThrowingCalls.empty() || !ehCleanupThrows.empty()) {
+      for (cir::CallOp callOp : ehCleanupThrowingCalls)
+        rewriter.modifyOpInPlace(callOp, [&] { callOp.setUnwindabort(true); });
+      if (!ehCleanupThrows.empty()) {
         mlir::Block *terminateBlock =
             buildTerminateUnwindBlock(loc, continueBlock, rewriter);
-        for (cir::CallOp callOp : ehCleanupThrowingCalls)
-          replaceCallWithTryCall(callOp, terminateBlock, loc, rewriter);
         for (cir::ThrowOp throwOp : ehCleanupThrows)
           replaceThrowWithTryThrow(throwOp, terminateBlock, loc, rewriter);
       }
@@ -2057,6 +2059,14 @@ public:
     // Collect resume ops from already-flattened cleanup scopes in the try body.
     llvm::SmallVector<cir::ResumeOp> resumeOpsToChain;
     collectResumeOps(tryOp.getTryRegion(), resumeOpsToChain);
+
+    // An exception escaping a call in a terminate scope terminates the
+    // program whatever its type, so the call does not need an unwind edge.
+    if (isTerminateScope(tryOp)) {
+      for (cir::CallOp callOp : callsToRewrite)
+        rewriter.modifyOpInPlace(callOp, [&] { callOp.setUnwindabort(true); });
+      callsToRewrite.clear();
+    }
 
     // Split the current block and inline the try body.
     mlir::Block *currentBlock = rewriter.getInsertionBlock();

@@ -389,7 +389,7 @@ C *test_new_delete_conditional_with_placement(bool cond, int tag) {
 // LLVM: [[PL_DO_DEL]]:
 // LLVM:   %[[PL_LOAD_PTR:.*]] = load ptr, ptr %[[PL_SAVE_PTR]], align 8
 // LLVM:   %[[PL_LOAD_TAG:.*]] = load i32, ptr %[[PL_SAVE_TAG]], align 4
-// LLVM:   invoke void @_ZdlPvi(ptr %[[PL_LOAD_PTR]], i32 %[[PL_LOAD_TAG]])
+// LLVM:   call unwindabort void @_ZdlPvi(ptr %[[PL_LOAD_PTR]], i32 %[[PL_LOAD_TAG]])
 
 // OGCG-LABEL: @_Z42test_new_delete_conditional_with_placementbi
 // OGCG:   store i1 false, ptr %[[OGP_FLAG:.*]], align 1
@@ -473,7 +473,7 @@ D *test_new_delete_conditional_with_size(bool cond) {
 // LLVM: [[SD_DO_DEL]]:
 // LLVM:   %[[SD_LOAD_PTR:.*]] = load ptr, ptr %[[SD_SAVE_PTR]], align 8
 // LLVM:   %[[SD_LOAD_SIZE:.*]] = load i64, ptr %[[SD_SAVE_SIZE]], align 8
-// LLVM:   invoke void @_ZN1DdlEPvm(ptr %[[SD_LOAD_PTR]], i64 %[[SD_LOAD_SIZE]])
+// LLVM:   call unwindabort void @_ZN1DdlEPvm(ptr %[[SD_LOAD_PTR]], i64 %[[SD_LOAD_SIZE]])
 
 // OGCG-LABEL: @_Z37test_new_delete_conditional_with_sizeb
 // OGCG:   store i1 false, ptr %[[OGS_FLAG:.*]], align 1
@@ -551,7 +551,7 @@ D *test_new_delete_conditional_array(bool cond, int n) {
 // LLVM: [[ARR_DO_DEL]]:
 // LLVM:   %[[ARR_LOAD_PTR:.*]] = load ptr, ptr %[[ARR_SAVE_PTR]], align 8
 // LLVM:   %[[ARR_LOAD_SIZE:.*]] = load i64, ptr %[[ARR_SAVE_SIZE]], align 8
-// LLVM:   invoke void @_ZN1DdaEPvm(ptr %[[ARR_LOAD_PTR]], i64 %[[ARR_LOAD_SIZE]])
+// LLVM:   call unwindabort void @_ZN1DdaEPvm(ptr %[[ARR_LOAD_PTR]], i64 %[[ARR_LOAD_SIZE]])
 
 // OGCG-LABEL: @_Z33test_new_delete_conditional_arraybi
 // OGCG:   store i1 false, ptr %[[OGA_FLAG:.*]], align 1

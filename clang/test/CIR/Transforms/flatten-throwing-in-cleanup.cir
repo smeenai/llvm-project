@@ -5,8 +5,8 @@
 !u8i = !cir.int<u, 8>
 !rec_SomeClass = !cir.struct<"SomeClass" {data !s32i}>
 
-// Test that a throwing call in an EH cleanup region is replaced with
-// cir.try_call that unwinds to a terminate block.
+// Test that a throwing call in an EH cleanup region is marked unwindabort, as
+// an exception escaping it terminates the program.
 cir.func @test_throwing_dtor_in_eh_cleanup() {
   %0 = cir.alloca "c" align(4) init : !cir.ptr<!rec_SomeClass>
   cir.call @ctor(%0) : (!cir.ptr<!rec_SomeClass>) -> ()
@@ -34,25 +34,20 @@ cir.func @test_throwing_dtor_in_eh_cleanup() {
 // CHECK:         %[[ET1:.*]] = cir.eh.initiate cleanup : !cir.eh_token
 // CHECK:         cir.br ^[[EH_CLEANUP:bb[0-9]+]](%[[ET1]] : !cir.eh_token)
 //
-// EH cleanup block: the dtor call is replaced with try_call unwinding to terminate.
+// EH cleanup block: the dtor call is marked unwindabort.
 // CHECK:       ^[[EH_CLEANUP]](%[[ET2:.*]]: !cir.eh_token):
 // CHECK:         %[[CT:.*]] = cir.begin_cleanup %[[ET2]]
-// CHECK:         cir.try_call @dtor(%{{.*}}) ^[[DTOR_NORMAL:bb[0-9]+]], ^[[TERMINATE:bb[0-9]+]]
-// CHECK:       ^[[DTOR_NORMAL]]:
-// CHECK:         cir.end_cleanup %[[CT]]
-// CHECK:         cir.resume %[[ET2]]
-//
-// Terminate block: cir.eh.initiate + cir.eh.terminate.
-// CHECK:       ^[[TERMINATE]]:
-// CHECK:         %[[TET:.*]] = cir.eh.initiate : !cir.eh_token
-// CHECK:         cir.eh.terminate %[[TET]] : !cir.eh_token
+// CHECK-NEXT:    cir.call @dtor(%{{.*}}) unwindabort
+// CHECK-NEXT:    cir.end_cleanup %[[CT]]
+// CHECK-NEXT:    cir.resume %[[ET2]]
+// CHECK-NOT:     cir.eh.terminate
 //
 // CHECK:       ^[[CONTINUE]]:
 // CHECK:         cir.return
 
 
 // Test that a throwing call in an "all" (Normal+EH) cleanup region is handled.
-// On the EH cleanup path, the call is replaced with try_call → terminate.
+// On the EH cleanup path, the call is marked unwindabort.
 // On the normal cleanup path, the call remains a regular cir.call.
 cir.func @test_throwing_dtor_in_all_cleanup() {
   %0 = cir.alloca "c" align(4) init : !cir.ptr<!rec_SomeClass>
@@ -75,22 +70,18 @@ cir.func @test_throwing_dtor_in_all_cleanup() {
 // CHECK:         cir.try_call @doSomething(%{{.*}}) ^[[NORMAL_BODY:bb[0-9]+]], ^[[UNWIND:bb[0-9]+]]
 // CHECK:       ^[[NORMAL_BODY]]:
 //
-// Normal cleanup: dtor is a regular call (not try_call).
-// CHECK:         cir.call @dtor(%{{.*}})
+// Normal cleanup: dtor is a regular call.
+// CHECK:         cir.call @dtor(%{{.*}}) : (!cir.ptr<!rec_SomeClass>) -> ()
 // CHECK:         cir.br ^{{bb[0-9]+}}
 //
-// EH cleanup path: dtor is try_call unwinding to terminate.
+// EH cleanup path: dtor is marked unwindabort.
 // CHECK:       ^{{bb[0-9]+}}(%[[ET2:.*]]: !cir.eh_token):
 // CHECK:         %[[CT:.*]] = cir.begin_cleanup %[[ET2]]
-// CHECK:         cir.try_call @dtor(%{{.*}}) ^[[DTOR_NORMAL:bb[0-9]+]], ^[[TERMINATE:bb[0-9]+]]
-// CHECK:       ^[[DTOR_NORMAL]]:
-// CHECK:         cir.end_cleanup %[[CT]]
-// CHECK:         cir.resume %[[ET2]]
-//
-// Terminate block.
-// CHECK:       ^[[TERMINATE]]:
-// CHECK:         %[[TET:.*]] = cir.eh.initiate : !cir.eh_token
-// CHECK:         cir.eh.terminate %[[TET]] : !cir.eh_token
+// CHECK-NEXT:    cir.call @dtor(%{{.*}}) unwindabort
+// CHECK-NEXT:    cir.end_cleanup %[[CT]]
+// CHECK-NEXT:    cir.resume %[[ET2]]
+// CHECK-NOT:     cir.eh.terminate
+// CHECK:         cir.return
 
 
 // Test throwing call in EH cleanup within a try operation.
@@ -119,13 +110,11 @@ cir.func @test_throwing_dtor_in_eh_cleanup_in_try() {
 // Body try_call unwinding to EH cleanup.
 // CHECK:         cir.try_call @doSomething(%{{.*}}) ^{{bb[0-9]+}}, ^{{bb[0-9]+}}
 //
-// EH cleanup: dtor is try_call unwinding to terminate.
-// CHECK:         cir.try_call @dtor(%{{.*}}) ^{{bb[0-9]+}}, ^[[TERMINATE:bb[0-9]+]]
-//
-// Terminate block.
-// CHECK:       ^[[TERMINATE]]:
-// CHECK:         %[[TET:.*]] = cir.eh.initiate : !cir.eh_token
-// CHECK:         cir.eh.terminate %[[TET]] : !cir.eh_token
+// EH cleanup: dtor is marked unwindabort, so the enclosing try does not give
+// it an unwind edge.
+// CHECK:         cir.call @dtor(%{{.*}}) unwindabort
+// CHECK-NOT:     cir.eh.terminate
+// CHECK:         cir.return
 
 
 // Test multiple throwing calls in the cleanup region.
@@ -147,18 +136,14 @@ cir.func @test_multiple_throwing_calls_in_cleanup() {
 
 // CHECK-LABEL: cir.func @test_multiple_throwing_calls_in_cleanup()
 //
-// EH cleanup: both dtors are try_calls unwinding to the same terminate block.
-// CHECK:         cir.try_call @dtor(%{{.*}}) ^[[DTOR1_NORMAL:bb[0-9]+]], ^[[TERMINATE:bb[0-9]+]]
-// CHECK:       ^[[DTOR1_NORMAL]]:
-// CHECK:         cir.try_call @dtor(%{{.*}}) ^[[DTOR2_NORMAL:bb[0-9]+]], ^[[TERMINATE]]
-// CHECK:       ^[[DTOR2_NORMAL]]:
-// CHECK:         cir.end_cleanup
-// CHECK:         cir.resume
-//
-// Shared terminate block for both calls.
-// CHECK:       ^[[TERMINATE]]:
-// CHECK:         %[[TET:.*]] = cir.eh.initiate : !cir.eh_token
-// CHECK:         cir.eh.terminate %[[TET]] : !cir.eh_token
+// EH cleanup: both dtors are marked unwindabort.
+// CHECK:         cir.begin_cleanup
+// CHECK-NEXT:    cir.call @dtor(%{{.*}}) unwindabort
+// CHECK-NEXT:    cir.call @dtor(%{{.*}}) unwindabort
+// CHECK-NEXT:    cir.end_cleanup
+// CHECK-NEXT:    cir.resume
+// CHECK-NOT:     cir.eh.terminate
+// CHECK:         cir.return
 
 
 cir.func private @ctor(!cir.ptr<!rec_SomeClass>)

@@ -2641,6 +2641,8 @@ static mlir::LogicalResult rewriteCallOrInvoke(
     newOp.setNoreturn(noReturn);
     if (op->hasAttr(CIRDialect::getMustTailAttrName()))
       newOp.setTailCallKind(mlir::LLVM::TailCallKind::MustTail);
+    if (op->hasAttr(CIRDialect::getUnwindAbortAttrName()))
+      newOp.setUnwindAbort(true);
 
     if (std::optional<cir::InlineKind> inlineKind = call.getInlineKind()) {
       newOp.setNoInline(*inlineKind == cir::InlineKind::NoInline);

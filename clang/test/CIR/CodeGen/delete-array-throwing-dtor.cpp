@@ -169,21 +169,13 @@ void test_delete_array_throwing_dtor(ThrowingDtor *ptr) {
 // LLVM:   %[[CL_CMP:.*]] = icmp ne ptr %[[CL_CUR]], %[[PTR]]
 // LLVM:   br i1 %[[CL_CMP]], label %[[CL_BODY:[^,]+]], label %{{.*}}
 //
-// Cleanup do-while body: load current, decrement, store back, invoke
-// dtor(prev). On a *second* throw, unwind to terminate.lpad.
+// Cleanup do-while body: load current, decrement, store back, call
+// dtor(prev) with unwindabort so that a *second* throw terminates.
 // LLVM: [[CL_BODY]]:
 // LLVM:   %[[CL_LOAD:.*]] = load ptr, ptr %[[ARR_IDX]]
 // LLVM:   %[[CL_PREV:.*]] = getelementptr %struct.ThrowingDtor, ptr %[[CL_LOAD]], i64 -1
 // LLVM:   store ptr %[[CL_PREV]], ptr %[[ARR_IDX]]
-// LLVM:   invoke void @_ZN12ThrowingDtorD1Ev(ptr %[[CL_PREV]])
-// LLVM:           to label %{{.*}} unwind label %[[TERMINATE_LPAD:[^ ]+]]
-//
-// Terminate landing pad: catch-all + `__clang_call_terminate`.
-// LLVM: [[TERMINATE_LPAD]]:
-// LLVM:   landingpad { ptr, i32 }
-// LLVM:           catch ptr null
-// LLVM:   call void @__clang_call_terminate(ptr %{{.*}})
-// LLVM:   unreachable
+// LLVM:   call unwindabort void @_ZN12ThrowingDtorD1Ev(ptr %[[CL_PREV]])
 //
 // Normal path: compute total size, call `_ZdaPvm`. Mirrors OGCG's
 // `arraydestroy.done7` block.

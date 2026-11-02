@@ -9,8 +9,8 @@
 
 // Test that a struct with a potentially-throwing destructor (noexcept(false))
 // produces the correct high-level CIR (cleanup region without nothrow on the
-// dtor call) and correct flattened CIR (try_call in the EH cleanup path with
-// an unwind-to-terminate block).
+// dtor call) and correct flattened CIR (an unwindabort call in the EH cleanup
+// path).
 
 struct ThrowingDtor {
   ~ThrowingDtor() noexcept(false);
@@ -35,7 +35,7 @@ void test_throwing_dtor_cleanup() {
 // CIR:   }
 
 // Flattened: body call becomes try_call. In the EH cleanup path, the dtor
-// becomes a try_call that unwinds to a terminate block.
+// call is marked unwindabort, since an exception escaping it terminates.
 //
 // CIR-FLAT: cir.func{{.*}} @_Z26test_throwing_dtor_cleanupv()
 // CIR-FLAT:   %[[C:.*]] = cir.alloca "c" {{.*}} : !cir.ptr<!rec_ThrowingDtor>
@@ -49,19 +49,14 @@ void test_throwing_dtor_cleanup() {
 // CIR-FLAT: ^[[NORMAL_BODY]]:
 // CIR-FLAT:   cir.call @_ZN12ThrowingDtorD1Ev(%[[C]])
 //
-// EH cleanup: dtor becomes try_call with unwind to terminate.
-// CIR-FLAT:   cir.try_call @_ZN12ThrowingDtorD1Ev(%[[C]]) ^[[DTOR_OK:bb[0-9]+]], ^[[TERMINATE:bb[0-9]+]]
-// CIR-FLAT: ^[[DTOR_OK]]:
-// CIR-FLAT:   cir.end_cleanup
-// CIR-FLAT:   cir.resume
-//
-// Terminate block.
-// CIR-FLAT: ^[[TERMINATE]]:
-// CIR-FLAT:   %[[TET:.*]] = cir.eh.initiate : !cir.eh_token
-// CIR-FLAT:   cir.eh.terminate %[[TET]] : !cir.eh_token
+// EH cleanup: the dtor call is marked unwindabort.
+// CIR-FLAT:   cir.call @_ZN12ThrowingDtorD1Ev(%[[C]]) unwindabort
+// CIR-FLAT-NEXT: cir.end_cleanup
+// CIR-FLAT-NEXT: cir.resume
+// CIR-FLAT-NOT: cir.eh.terminate
 
 // LLVM IR via the CIR pipeline. doSomething is invoked, dtor is called on
-// normal path, invoked on EH path with unwind to terminate.
+// normal path, and called with unwindabort on the EH path.
 //
 // LLVM: define dso_local void @_Z26test_throwing_dtor_cleanupv()
 // LLVM-SAME: personality ptr @__gxx_personality_v0
@@ -73,24 +68,12 @@ void test_throwing_dtor_cleanup() {
 // LLVM: [[LPAD]]:
 // LLVM:   landingpad { ptr, i32 }
 // LLVM:           cleanup
-// LLVM:   invoke void @_ZN12ThrowingDtorD1Ev(ptr {{.*}} %[[C]])
-// LLVM:           to label %[[RESUME:.*]] unwind label %[[TERMINATE:.*]]
-// LLVM: [[RESUME]]:
+// LLVM:   call unwindabort void @_ZN12ThrowingDtorD1Ev(ptr {{.*}} %[[C]])
 // LLVM:   resume { ptr, i32 }
-// LLVM: [[TERMINATE]]:
-// LLVM:   landingpad { ptr, i32 }
-// LLVM:           catch ptr null
-// LLVM:   call void @__clang_call_terminate(ptr
-// LLVM:   unreachable
 // LLVM:   ret void
-//
-// LLVM: define linkonce_odr hidden void @__clang_call_terminate(ptr %[[EXN:.*]])
-// LLVM:   call ptr @__cxa_begin_catch(ptr %[[EXN]])
-// LLVM:   call void @_ZSt9terminatev()
-// LLVM:   unreachable
+// LLVM-NOT: __clang_call_terminate
 
-// Same structural flow from original Clang CodeGen, except that the EH-path
-// dtor call is marked unwindabort instead of unwinding to a terminate block.
+// Same structural flow from original Clang CodeGen.
 //
 // OGCG: define dso_local void @_Z26test_throwing_dtor_cleanupv()
 // OGCG-SAME: personality ptr @__gxx_personality_v0

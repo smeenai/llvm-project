@@ -78,13 +78,15 @@ mlir::Block *cir::replaceCallWithTryCall(cir::CallOp callOp,
   }
 
   // Preserve the call semantics shared by CallOp and TryCallOp. The callee and
-  // operand segments are already populated by TryCallOp::create, and a
-  // throwing call cannot carry the nothrow property. nounwind describes the
-  // callee, so it survives even though this site gains an unwind edge.
+  // operand segments are already populated by TryCallOp::create, a throwing
+  // call cannot carry the nothrow property, and the unwind edge takes the
+  // place of unwindabort. nounwind describes the callee, so it survives even
+  // though this site gains an unwind edge.
   callOp->getName().walkInherentAttrs(
       callOp, [&](llvm::StringRef name, mlir::Attribute &attr) {
         if (name != cir::CIRDialect::getCalleeAttrName() &&
             name != cir::CIRDialect::getNoThrowAttrName() &&
+            name != cir::CIRDialect::getUnwindAbortAttrName() &&
             name != cir::CIRDialect::getOperandSegmentSizesAttrName())
           tryCallOp->setInherentAttr(
               mlir::StringAttr::get(callOp->getContext(), name), attr);

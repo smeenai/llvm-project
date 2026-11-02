@@ -1,0 +1,83 @@
+// RUN: cir-opt %s -cir-eh-abi-lowering -split-input-file -o %t.cir
+// RUN: FileCheck --input-file=%t.cir %s
+
+// The Itanium lowering leaves an unwindabort call for LLVM when the
+// personality terminates on an exception reaching a call site that is missing
+// from the LSDA, and otherwise gives the call a terminate landing pad.
+
+!s32i = !cir.int<s, 32>
+
+module attributes {cir.triple = "x86_64-unknown-linux-gnu"} {
+
+cir.func private @f()
+cir.func private @__gxx_personality_v0(...) -> !s32i
+cir.func private @__objc_personality_v0(...) -> !s32i
+cir.func private @__gxx_personality_sj0(...) -> !s32i
+
+// CHECK-LABEL: cir.func @gxx()
+// CHECK-SAME:    personality(@__gxx_personality_v0)
+// CHECK-NEXT:    cir.call @f() unwindabort : () -> ()
+// CHECK-NEXT:    cir.return
+cir.func @gxx() personality(@__gxx_personality_v0) {
+  cir.call @f() unwindabort : () -> ()
+  cir.return
+}
+
+// CHECK-LABEL: cir.func @objc()
+// CHECK-SAME:    personality(@__objc_personality_v0)
+// CHECK-NEXT:    cir.call @f() unwindabort : () -> ()
+cir.func @objc() personality(@__objc_personality_v0) {
+  cir.call @f() unwindabort : () -> ()
+  cir.return
+}
+
+// LLVM requires a personality for an unwindabort call.
+// CHECK-LABEL: cir.func @no_personality()
+// CHECK-SAME:    personality(@__gxx_personality_v0)
+// CHECK-NEXT:    cir.call @f() unwindabort : () -> ()
+cir.func @no_personality() {
+  cir.call @f() unwindabort : () -> ()
+  cir.return
+}
+
+// Both calls share one terminate landing pad.
+// CHECK-LABEL: cir.func @sjlj()
+// CHECK-SAME:    personality(@__gxx_personality_sj0)
+// CHECK-NEXT:    cir.try_call @f() ^[[CONT:bb[0-9]+]], ^[[TERM:bb[0-9]+]] : () -> ()
+// CHECK-NEXT:  ^[[CONT]]:
+// CHECK-NEXT:    cir.try_call @f() ^[[CONT2:bb[0-9]+]], ^[[TERM]] : () -> ()
+// CHECK-NEXT:  ^[[CONT2]]:
+// CHECK-NEXT:    cir.return
+// CHECK-NEXT:  ^[[TERM]]:
+// CHECK-NEXT:    %[[EXN:.*]], %{{.*}} = cir.eh.inflight_exception catch_all
+// CHECK-NEXT:    cir.call @__clang_call_terminate(%[[EXN]]) nothrow {noreturn}
+// CHECK-NEXT:    cir.unreachable
+cir.func @sjlj() personality(@__gxx_personality_sj0) {
+  cir.call @f() unwindabort : () -> ()
+  cir.call @f() unwindabort : () -> ()
+  cir.return
+}
+
+}
+
+// -----
+
+!s32i = !cir.int<s, 32>
+
+// Emscripten's EH uses the Itanium C++ personality, but not its call-site
+// tables.
+module attributes {cir.triple = "wasm32-unknown-emscripten"} {
+
+cir.func private @f()
+cir.func private @__gxx_personality_v0(...) -> !s32i
+
+// CHECK-LABEL: cir.func @wasm()
+// CHECK-NEXT:    cir.try_call @f() ^{{bb[0-9]+}}, ^[[TERM:bb[0-9]+]] : () -> ()
+// CHECK:       ^[[TERM]]:
+// CHECK-NEXT:    cir.eh.inflight_exception catch_all
+cir.func @wasm() personality(@__gxx_personality_v0) {
+  cir.call @f() unwindabort : () -> ()
+  cir.return
+}
+
+}

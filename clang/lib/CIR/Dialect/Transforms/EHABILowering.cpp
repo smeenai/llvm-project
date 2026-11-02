@@ -25,6 +25,9 @@
 //                                  catch-copy thunk body, or a store of the
 //                                  exception object address for
 //                                  reference_to_pointer
+//   - cir.call unwindabort       → (kept) when the personality supports it,
+//                                  otherwise a cir.try_call that unwinds to a
+//                                  terminate landing pad
 //   - personality function set on functions requiring EH
 //
 //===----------------------------------------------------------------------===//
@@ -110,7 +113,8 @@ protected:
 /// eh_token produced by the initiate through its users.
 class ItaniumEHLowering : public EHABILowering {
 public:
-  using EHABILowering::EHABILowering;
+  ItaniumEHLowering(mlir::ModuleOp mod, const llvm::Triple &triple)
+      : EHABILowering(mod), triple(triple) {}
   mlir::LogicalResult run() override;
 
 private:
@@ -118,6 +122,7 @@ private:
   /// an exception pointer (!cir.ptr<!void>) and a type id (!u32i).
   using EhTokenMap = DenseMap<mlir::Value, std::pair<mlir::Value, mlir::Value>>;
 
+  llvm::Triple triple;
   cir::VoidType voidType;
   cir::PointerType voidPtrType;
   cir::PointerType u8PtrType;
@@ -159,6 +164,8 @@ private:
                                                mlir::Value exnPtr);
   void lowerInitCatchParam(cir::InitCatchParamOp op);
   mlir::LogicalResult lowerTryThrow(cir::TryThrowOp op);
+  bool supportsUnwindAbort(cir::FuncOp funcOp);
+  void lowerUnwindAbortCalls(cir::FuncOp funcOp);
 };
 
 /// Lower all EH operations in the module to the Itanium-specific form.
@@ -175,8 +182,47 @@ mlir::LogicalResult ItaniumEHLowering::run() {
   for (cir::FuncOp funcOp : mod.getOps<cir::FuncOp>()) {
     if (mlir::failed(lowerFunc(funcOp)))
       return mlir::failure();
+    lowerUnwindAbortCalls(funcOp);
   }
   return mlir::success();
+}
+
+/// Whether an unwindabort call can be left for LLVM, which leaves the call out
+/// of the LSDA's call-site table. That only terminates the program for
+/// personalities that treat a missing entry that way, which is what
+/// EHPersonality::supportsUnwindAbort() checks in classic codegen.
+bool ItaniumEHLowering::supportsUnwindAbort(cir::FuncOp funcOp) {
+  // Emscripten's JavaScript-based EH uses the Itanium C++ personality but not
+  // its call-site tables.
+  if (triple.isWasm())
+    return false;
+  std::optional<llvm::StringRef> personality = funcOp.getPersonality();
+  return personality && (*personality == kGxxPersonality ||
+                         *personality == "__objc_personality_v0");
+}
+
+/// Give each unwindabort call a terminate landing pad if the personality
+/// cannot honor the marker. Either way, the function needs a personality.
+void ItaniumEHLowering::lowerUnwindAbortCalls(cir::FuncOp funcOp) {
+  SmallVector<cir::CallOp> unwindAbortCalls;
+  funcOp.walk([&](cir::CallOp op) {
+    if (op.getUnwindabort())
+      unwindAbortCalls.push_back(op);
+  });
+  if (unwindAbortCalls.empty())
+    return;
+
+  // TODO(cir): As in lowerFunc, CIRGen should have set this already.
+  if (!funcOp.getPersonality())
+    funcOp.setPersonality(kGxxPersonality);
+  if (supportsUnwindAbort(funcOp))
+    return;
+
+  ensureClangCallTerminate(funcOp.getLoc());
+  mlir::Block *terminateBlock = buildTerminateBlock(funcOp, funcOp.getLoc());
+  mlir::IRRewriter rewriter(builder);
+  for (cir::CallOp call : unwindAbortCalls)
+    cir::replaceCallWithTryCall(call, terminateBlock, call.getLoc(), rewriter);
 }
 
 /// Ensure the necessary Itanium runtime function declarations exist in the
@@ -867,7 +913,6 @@ ItaniumEHLowering::lowerConstructCatchParam(cir::ConstructCatchParamOp op,
                           "kinds are supported");
 
   ensureRuntimeDecls(loc);
-  ensureClangCallTerminate(loc);
 
   // Call __cxa_get_exception_ptr to get the in-flight exception.
   builder.setInsertionPoint(op);
@@ -904,19 +949,10 @@ ItaniumEHLowering::lowerConstructCatchParam(cir::ConstructCatchParamOp op,
   }
   op.erase();
 
-  if (throwingCalls.empty())
-    return mlir::success();
-
-  // All calls in the copy (which is usually just a single call) need to
-  // unwind to a terminate block if it throws an exception.
-  mlir::IRRewriter rewriter(builder);
-  mlir::Block *terminateBlock = nullptr;
-  for (cir::CallOp call : throwingCalls) {
-    if (!terminateBlock)
-      terminateBlock = buildTerminateBlock(call->getParentOfType<cir::FuncOp>(),
-                                           call.getLoc());
-    cir::replaceCallWithTryCall(call, terminateBlock, call.getLoc(), rewriter);
-  }
+  // An exception escaping any call in the copy (which is usually just a single
+  // call) terminates the program.
+  for (cir::CallOp call : throwingCalls)
+    call.setUnwindabort(true);
   return mlir::success();
 }
 
@@ -1144,7 +1180,7 @@ void CIREHABILoweringPass::runOnOperation() {
         "EH ABI lowering is not yet implemented for the Microsoft ABI");
     return signalPassFailure();
   } else {
-    lowering = std::make_unique<ItaniumEHLowering>(mod);
+    lowering = std::make_unique<ItaniumEHLowering>(mod, triple);
   }
 
   if (mlir::failed(lowering->run()))

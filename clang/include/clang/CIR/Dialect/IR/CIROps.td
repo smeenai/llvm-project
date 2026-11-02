@@ -4830,16 +4830,22 @@ def CIR_CallOp : CIR_CallOpBase<"call", [NoRegionArguments]> {
     Other calling conventions are printed as `cc(<mnemonic>)`, e.g.
     `cc(spir_function)`.
 
+    The `unwindabort` attribute means that an exception escaping the callee
+    terminates the program instead of unwinding into the caller, as if the
+    call were enclosed in a terminate scope. CFG flattening sets it on calls
+    whose unwind destination would be such a scope.
+
     Example:
 
     ```
     %0 = cir.call @foo()
     cir.call @bar() cc(spir_function) : () -> ()
+    cir.call @baz() unwindabort : () -> ()
     ```
   }];
 
   let results = (outs Optional<CIR_AnyType>:$result);
-  let arguments = commonArgs;
+  let arguments = !con(commonArgs, (ins UnitAttr:$unwindabort));
 
   let skipDefaultBuilders = 1;
 
