@@ -1114,6 +1114,10 @@ private:
     _registers.loadAndAuthenticateLinkRegister(rawPC, &pc);
 #else
     typename R::link_reg_t pc = this->getReg(UNW_REG_IP);
+    // The rules for an interrupted instruction include the row at its
+    // address (see setInfoBasedOnIPRegister).
+    if (_isSignalFrame)
+      ++pc;
 #endif
     return DwarfInstructions<A, R>::stepWithDwarf(
         _addressSpace, pc, (pint_t)_info.unwind_info, _registers,
@@ -2961,7 +2965,12 @@ void UnwindCursor<A, R>::setInfoBasedOnIPRegister(bool isReturnAddress) {
   // the return address is actually the start of the next function.
   // To disambiguate this, back up the pc when we know it is a return
   // address.
-  if (isReturnAddress)
+  bool interrupted = false;
+#if !(defined(_LIBUNWIND_SUPPORT_SEH_UNWIND) && defined(_WIN32)) &&            \
+    !defined(_LIBUNWIND_SUPPORT_TBTAB_UNWIND)
+  interrupted = _isSignalFrame;
+#endif
+  if (isReturnAddress && !interrupted)
 #if defined(_AIX)
     // PC needs to be a 4-byte aligned address to be able to look for a
     // word of 0 that indicates the start of the traceback table at the end
@@ -2971,14 +2980,11 @@ void UnwindCursor<A, R>::setInfoBasedOnIPRegister(bool isReturnAddress) {
     --pc;
 #endif
 
-#if !(defined(_LIBUNWIND_SUPPORT_SEH_UNWIND) && defined(_WIN32)) &&            \
-    !defined(_LIBUNWIND_SUPPORT_TBTAB_UNWIND)
   // In case of this is frame of signal handler, the IP saved in the signal
   // handler points to first non-executed instruction, while FDE/CIE expects IP
   // to be after the first non-executed instruction.
-  if (_isSignalFrame)
+  if (interrupted)
     ++pc;
-#endif
 
   // Ask address space object to find unwind sections for this pc.
   UnwindInfoSections sects;
