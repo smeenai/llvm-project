@@ -62,6 +62,7 @@
 // ASYNC:      Mode: Escape
 // ASYNC-NEXT: Augmentation: S
 // ASYNC:      Kind: LSDA (0x1)
+// ASYNC:      BaseLSDA: 0x240008
 // ASYNC:      0x21000c: 0x240008
 
 // SYNC:      Flags [ (0x1)

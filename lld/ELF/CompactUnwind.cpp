@@ -996,6 +996,9 @@ struct CompactUnwindTable::Impl {
     struct Page {
       uint64_t va;
       size_t first, count, off;
+      // LSDA pages only: u16 payloads relative to this LSDA.
+      bool compressed = false;
+      uint64_t base = 0;
     };
     SmallVector<Row, 0> rows;
     SmallVector<Page, 0> pages;
@@ -1037,6 +1040,7 @@ struct CompactUnwindTable::Impl {
   }
 
   void encode();
+  void compressLsdaPages();
   size_t layout(uint64_t hdrVA);
   void write(uint8_t *buf, uint64_t hdrVA);
 };
@@ -1308,6 +1312,52 @@ void CompactUnwindTable::Impl::encode() {
   noInfo = getLDesc(a64::ModeNoInfo, -1, true, false);
 }
 
+// Repages the LSDA table so that pages whose LSDAs are 4-byte aligned and
+// span less than 256 KiB store u16 offsets from a base LSDA instead of s32
+// LSDAs. A row that doesn't fit ends a compressed page, unless the page is
+// still small, in which case the page stays uncompressed.
+void CompactUnwindTable::Impl::compressLsdaPages() {
+  SideTable &t = lsdaTable;
+  SmallVector<uint64_t, 0> lsda(t.rows.size());
+  for (size_t i = 0; i < t.rows.size(); ++i) {
+    const Func &f = funcs[t.rows[i].func];
+    lsda[i] = f.lsdaSym ? f.lsdaSym->getVA(ctx, f.lsdaAddend) : 0;
+  }
+  t.pages.clear();
+  size_t i = 0;
+  while (i < t.rows.size()) {
+    SideTable::Page p{t.rows[i].va, i, 0, 0};
+    p.compressed = true;
+    uint64_t lo = UINT64_MAX, hi = 0;
+    for (; i < t.rows.size(); ++i) {
+      if ((t.rows[i].va - p.va) / 4 > 0xffff)
+        break;
+      uint64_t nlo = lo, nhi = hi;
+      bool fits = p.compressed;
+      if (lsda[i]) {
+        nlo = std::min(lo, lsda[i]);
+        nhi = std::max(hi, lsda[i]);
+        fits = fits && lsda[i] % 4 == 0 && (nhi - nlo) / 4 < 0xffff;
+      }
+      if (p.compressed && !fits) {
+        if (p.count >= 16)
+          break;
+        p.compressed = false;
+      }
+      size_t n = p.count + 1;
+      size_t bytes = p.compressed ? 8 + 4 * n : alignTo(4 + 2 * n, 4) + 4 * n;
+      if (bytes > cu::PageSize)
+        break;
+      lo = nlo;
+      hi = nhi;
+      ++p.count;
+    }
+    if (p.compressed)
+      p.base = lo == UINT64_MAX ? 0 : lo;
+    t.pages.push_back(p);
+  }
+}
+
 size_t CompactUnwindTable::Impl::layout(uint64_t hdrVA) {
   // A gap between functions needs an entry of its own unless it only holds
   // alignment padding: nothing but NOPs or zeros from the neighbouring input
@@ -1537,6 +1587,7 @@ size_t CompactUnwindTable::Impl::layout(uint64_t hdrVA) {
       t->pages.push_back({t->rows[i].va, i, 1, 0});
     }
   }
+  compressLsdaPages();
 
   size_t off = cu::HeaderSize;
   persOff = off;
@@ -1557,8 +1608,9 @@ size_t CompactUnwindTable::Impl::layout(uint64_t hdrVA) {
     off += 8 * (t->pages.size() + 1);
     for (SideTable::Page &p : t->pages) {
       p.off = alignTo(off, t->payloadWidth);
-      off = p.off + alignTo(4 + 2 * p.count, t->payloadWidth) +
-            t->payloadWidth * p.count;
+      off = p.off + (p.compressed ? 8 + 4 * p.count
+                                  : alignTo(4 + 2 * p.count, t->payloadWidth) +
+                                        t->payloadWidth * p.count);
     }
     off = alignTo(off, 4);
   }
@@ -1654,7 +1706,21 @@ void CompactUnwindTable::Impl::write(uint8_t *buf, uint64_t hdrVA) {
       write32(ctx, buf + t->flOff + 8 * k + 4, p.off);
       uint8_t *pb = buf + p.off;
       write16(ctx, pb, p.count);
-      write16(ctx, pb + 2, 0);
+      write16(ctx, pb + 2, p.compressed ? cu::SidePageCompressed : 0);
+      if (p.compressed) {
+        // s32 base LSDA, u16 pc offsets, u16 LSDA offsets from the base in 4 B
+        // units.
+        write32(ctx, pb + 4, rel(p.base));
+        for (size_t j = 0; j < p.count; ++j) {
+          const SideTable::Row &row = t->rows[p.first + j];
+          const Func &f = funcs[row.func];
+          write16(ctx, pb + 8 + 2 * j, (row.va - p.va) / 4);
+          write16(ctx, pb + 8 + 2 * p.count + 2 * j,
+                  f.lsdaSym ? (f.lsdaSym->getVA(ctx, f.lsdaAddend) - p.base) / 4
+                            : cu::CompressedNoLSDA);
+        }
+        continue;
+      }
       uint8_t *pay = pb + alignTo(4 + 2 * p.count, t->payloadWidth);
       for (size_t j = 0; j < p.count; ++j) {
         const SideTable::Row &row = t->rows[p.first + j];
