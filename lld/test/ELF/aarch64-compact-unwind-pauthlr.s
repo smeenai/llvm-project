@@ -10,7 +10,12 @@
 
 // ASYNC:      Start: 0x210000
 // ASYNC-NEXT: End: 0x21002C
-// ASYNC:      Mode: Escape
+// ASYNC:      Mode: FP
+// ASYNC:      N: 1
+// ASYNC-NEXT: RA: A, PC
+// ASYNC-NEXT: Prologue: apos=2 PS=4
+// ASYNC-NEXT: Epilogue: window=1 tail=5
+// ASYNC-NEXT: PAuthLRSite: 0x210004
 // ASYNC:      0x210000: CFA=reg31
 // ASYNC-NEXT: 0x210008: CFA=reg31: reg34=2
 // ASYNC-NEXT: 0x21000c: CFA=reg31+16: reg34=2
@@ -20,7 +25,12 @@
 // ASYNC-NEXT: 0x210028: CFA=reg31
 // ASYNC:      Start: 0x21002C
 // ASYNC-NEXT: End: 0x210054
-// ASYNC:      Mode: Escape
+// ASYNC:      Mode: SP
+// ASYNC:      N: 1
+// ASYNC-NEXT: RA: A, PC
+// ASYNC-NEXT: Prologue: apos=2 PS=3
+// ASYNC-NEXT: Epilogue: window=0 tail=5
+// ASYNC-NEXT: PAuthLRSite: 0x210030
 // ASYNC:      0x21002c: CFA=reg31
 // ASYNC-NEXT: 0x210034: CFA=reg31: reg34=2
 // ASYNC-NEXT: 0x210038: CFA=reg31+16: reg30=[CFA-16], reg34=2
@@ -30,22 +40,20 @@
 // SYNC:      SyncOnly (0x1)
 // SYNC:      Start: 0x210000
 // SYNC-NEXT: End: 0x21002C
-// SYNC:      Mode: Escape
-// SYNC:      0x210000: CFA=reg31
-// SYNC-NEXT: 0x210008: CFA=reg31: reg34=2
-// SYNC-NEXT: 0x21000c: CFA=reg31+16: reg34=2
-// SYNC-NEXT: 0x210010: CFA=reg29+16: reg29=[CFA-16], reg30=[CFA-8], reg34=2
-// SYNC-NEXT: 0x210014: CFA=reg31+16: reg29=[CFA-16], reg30=[CFA-8], reg34=2
-// SYNC-NEXT: 0x210018: CFA=reg31: reg34=2
-// SYNC-NEXT: 0x210028: CFA=reg31
+// SYNC:      Mode: FP
+// SYNC:      N: 1
+// SYNC-NEXT: RA: A, PC
+// SYNC-NEXT: PAuthLRSite: 0x210004
+// SYNC:      0x210000: CFA=reg29+16: reg29=[CFA-16], reg30=[CFA-8], reg34=2
 // SYNC:      Start: 0x21002C
 // SYNC-NEXT: End: 0x210054
-// SYNC:      Mode: Escape
-// SYNC:      0x21002c: CFA=reg31
-// SYNC-NEXT: 0x210034: CFA=reg31: reg34=2
-// SYNC-NEXT: 0x210038: CFA=reg31+16: reg30=[CFA-16], reg34=2
-// SYNC-NEXT: 0x210040: CFA=reg31: reg34=2
-// SYNC-NEXT: 0x210050: CFA=reg31
+// SYNC:      Mode: SP
+// SYNC:      N: 1
+// SYNC-NEXT: RA: A, PC
+// SYNC-NEXT: PAuthLRSite: 0x210030
+// SYNC:      0x21002c: CFA=reg31+16: reg30=[CFA-16], reg34=2
+// SYNC:      Kind: PAuthLRSite (0x80)
+// SYNC:      0x21002c: 0x210030
 
   .text
   .globl _start

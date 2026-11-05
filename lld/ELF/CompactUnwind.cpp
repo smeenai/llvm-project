@@ -137,6 +137,8 @@ struct Fn {
   SmallVector<uint32_t, 8> ids;
   SmallVector<uint32_t, 4> layouts;
   SmallVector<unsigned, 0> calls;
+  // Byte offset of the PAuth_LR signing instruction, if any.
+  std::optional<int64_t> pacSite;
   // bodyCandidates' results, shared with the functions encoded alongside.
   StringMap<SmallVector<Desc, 4>> *candidates = nullptr;
 
@@ -160,6 +162,8 @@ uint64_t raField(const Fn &fn, const State &st) {
 struct Interp {
   StringRef why;
   bool escapable = true;
+  // Byte offset of the PAuth_LR signing instruction from the function start.
+  std::optional<int64_t> pacSite;
 
   // cieRow is the row the CIE's instructions set up, if the interpreter
   // accepts them.
@@ -167,9 +171,10 @@ struct Interp {
            const std::optional<dwarf::UnwindRow> &cieRow,
            const dwarf::CFIProgram &fde, uint64_t size, Fn &fn) {
     fn.n = size / 4;
-    // What the rows don't show: positions that aren't relative to the
-    // function, the argument size, and PAuth_LR negations.
+    // What the interpreter doesn't keep: where the PAuth_LR signing
+    // instruction is, and the argument size.
     for (const dwarf::CFIProgram *p : {&cie, &fde}) {
+      int64_t loc = 0;
       for (const dwarf::CFIProgram::Instruction &inst : *p) {
         switch (inst.Opcode) {
         case DW_CFA_advance_loc:
@@ -178,6 +183,7 @@ struct Interp {
         case DW_CFA_advance_loc4:
           if (p == &cie)
             fail("cie_advance");
+          loc += cantFail(inst.getOperandAsUnsigned(*p, 0));
           break;
         case DW_CFA_set_loc:
           return unescapable("set_loc");
@@ -191,6 +197,13 @@ struct Interp {
         case DW_CFA_AARCH64_set_ra_state:
           if (inst.Ops[0] > 2)
             return unescapable("malformed");
+          // One signing site per function, recorded in a side table.
+          if (inst.Ops[0] == 2) {
+            int64_t site = loc + cantFail(inst.getOperandAsSigned(*p, 1));
+            if (pacSite && *pacSite != site)
+              fail("pauth_lr_sites");
+            pacSite = site;
+          }
           break;
         }
       }
@@ -576,6 +589,11 @@ std::optional<Desc> tryRegion(Fn &fn, unsigned a, unsigned b) {
       }
       if (p >= PS || p > 2)
         continue;
+      // A PC-signed prologue window locates the signing instruction at the
+      // end of its lead-in.
+      if (p >= 1 && s.WithPC && fn.pacSite &&
+          *fn.pacSite != int64_t(a + p - 1) * 4)
+        continue;
       if (p != s.CanonApos)
         d.bits |= uint64_t(p + 1) << a64::AposShift;
     }
@@ -617,11 +635,13 @@ std::optional<Desc> tryRegion(Fn &fn, unsigned a, unsigned b) {
 // What the table needs of a region's descriptor.
 struct RegionDesc {
   uint64_t bits, layout;
-  uint8_t ps, tailLen;
-  bool partial;
+  uint8_t mode, ps, apos, tailLen;
+  bool partial, fp, withPC;
+  a64::Convention conv;
   RegionDesc(const Desc &d)
-      : bits(d.bits), layout(d.layout), ps(d.shape.PS),
-        tailLen(d.shape.TailLen), partial(d.shape.Partial) {}
+      : bits(d.bits), layout(d.layout), mode(d.shape.Mode), ps(d.shape.PS),
+        apos(d.shape.Apos), tailLen(d.shape.TailLen), partial(d.shape.Partial),
+        fp(d.shape.FP), withPC(d.shape.WithPC), conv(d.shape.Conv) {}
 };
 using Regions = SmallVector<std::pair<unsigned, RegionDesc>, 2>;
 
@@ -883,6 +903,7 @@ struct EncodedFn {
   int64_t lsdaAddend = 0;
   Regions regions;
   std::string escape;
+  std::optional<int64_t> pacSite;
 };
 
 // Writes the FDE's instructions as an escape program body, for the implied
@@ -940,6 +961,7 @@ struct CompactUnwindTable::Impl {
     uint32_t pers; // 1-based index into pers, or 0
     Symbol *lsdaSym;
     int64_t lsdaAddend;
+    std::optional<int64_t> pacSite;
     SmallVector<std::pair<uint32_t, uint32_t>, 2> regions; // byte offset, ldesc
   };
   SmallVector<Func, 0> funcs;
@@ -982,10 +1004,12 @@ struct CompactUnwindTable::Impl {
   SmallVector<Page, 0> pages;
   SmallVector<uint32_t, 0> globals;
   DenseMap<uint32_t, uint32_t> globalIdx;
-  // LSDAs, for functions with a personality routine, and personality
-  // indices, for functions whose personality doesn't fit in the descriptor.
+  // LSDAs, for functions with a personality routine; personality indices,
+  // for functions whose personality doesn't fit in the descriptor; and PAuth_LR
+  // signing instructions, for functions where no descriptor locates it.
   SideTable lsdaTable{cu::SideTableLSDA, 4, {}, {}},
-      persTable{cu::SideTablePersonality, 2, {}, {}};
+      persTable{cu::SideTablePersonality, 2, {}, {}},
+      pacTable{cu::SideTablePAuthLRSite, 2, {}, {}};
   uint64_t endVA = 0;
   size_t persOff = 0, dirOff = 0, gdescOff = 0, flOff = 0, sideOff = 0,
          escOff = 0, totalSize = 0;
@@ -996,7 +1020,7 @@ struct CompactUnwindTable::Impl {
 
   SmallVector<SideTable *, 2> sideTables() {
     SmallVector<SideTable *, 2> v;
-    for (SideTable *t : {&lsdaTable, &persTable})
+    for (SideTable *t : {&lsdaTable, &persTable, &pacTable})
       if (!t->rows.empty())
         v.push_back(t);
     return v;
@@ -1120,11 +1144,14 @@ void CompactUnwindTable::Impl::encode() {
         anyPc |= st.raPc;
         anyPlain |= st.RASigned && !st.raPc;
       }
-      if (anyPc)
-        interp.why = "pauth_lr";
+      if (anyPc && (!interp.pacSite || *interp.pacSite % 4 ||
+                    !isInt<16>(*interp.pacSite / 4)))
+        interp.why = "pauth_lr_site";
       // Non-hint PAuth instructions always sign with the PC.
       else if (cie.nonHintPAuth && anyPlain)
         interp.why = "non_hint_pauth";
+      else if (anyPc)
+        out.pacSite = fn.pacSite = interp.pacSite;
     }
     if (interp.why.empty()) {
       // Layout candidates: maximal saved sets, plus their union when every
@@ -1175,6 +1202,7 @@ void CompactUnwindTable::Impl::encode() {
       return;
     out.why = interp.why;
     out.regions.clear();
+    out.pacSite.reset();
     if (!interp.escapable) {
       out.dropped = true;
       return;
@@ -1212,7 +1240,7 @@ void CompactUnwindTable::Impl::encode() {
                   << e.why << ")";
       continue;
     }
-    Func f{e.sym, e.addend, e.size, 0, e.lsdaSym, e.lsdaAddend, {}};
+    Func f{e.sym, e.addend, e.size, 0, e.lsdaSym, e.lsdaAddend, e.pacSite, {}};
     const Cie &cie = *e.cie;
     if (cie.pers) {
       auto it = llvm::find_if(pers, [&](const Pers &p) {
@@ -1245,15 +1273,33 @@ void CompactUnwindTable::Impl::encode() {
       funcs.push_back(std::move(f));
       continue;
     }
+    bool needPacRow = false;
     for (auto &[off, d] : e.regions) {
       uint64_t bits = d.bits | persBits;
       int32_t layout = d.partial ? getLDesc(d.layout, -1, true, false) : -1;
-      // Windows are relative to the region start, which folding would move, so
-      // descriptors with windows don't fold.
-      bool pe = d.ps || d.tailLen;
+      // Where the PAuth_LR signing instruction is: at the end of the prologue
+      // window's lead-in; else in N, region-relative, if nothing else uses N
+      // (4095: not representable); else in the side table.
+      bool pacInN = false;
+      if (d.withPC && !(d.ps && d.apos >= 1)) {
+        bool nFree =
+            !d.ps && !d.tailLen &&
+            (d.mode == a64::ModeNull || (d.fp && d.conv != a64::ConvGCC));
+        int64_t rel = (*e.pacSite - int64_t(off) * 4) / 4;
+        pacInN = nFree && rel >= 0 && rel < 4095;
+        if (nFree)
+          bits = withN(bits, pacInN ? rel : 4095);
+        if (!pacInN)
+          needPacRow = true;
+      }
+      // Windows and a signing offset in N are relative to the region start,
+      // which folding would move, so such descriptors don't fold.
+      bool pe = d.ps || d.tailLen || pacInN;
       f.regions.push_back(
           {off * 4, getLDesc(bits, layout, !pe, d.tailLen != 0)});
     }
+    if (!needPacRow)
+      f.pacSite.reset();
     funcs.push_back(std::move(f));
   }
   noInfo = getLDesc(a64::ModeNoInfo, -1, true, false);
@@ -1339,6 +1385,7 @@ size_t CompactUnwindTable::Impl::layout(uint64_t hdrVA) {
   entries.clear();
   lsdaTable.rows.clear();
   persTable.rows.clear();
+  pacTable.rows.clear();
   uint64_t prevEnd = 0;
   bool havePrev = false, prevEpi = false, prevFoldable = false;
   uint32_t prevDesc = 0;
@@ -1370,6 +1417,8 @@ size_t CompactUnwindTable::Impl::layout(uint64_t hdrVA) {
       lsdaTable.rows.push_back({va, i});
     if (f.pers >= 7)
       persTable.rows.push_back({va, i});
+    if (f.pacSite)
+      pacTable.rows.push_back({va, i});
     prevEpi = ldescs[f.regions.back().second].hasEpi;
     prevEnd = va + f.size;
     havePrev = true;
@@ -1453,7 +1502,7 @@ size_t CompactUnwindTable::Impl::layout(uint64_t hdrVA) {
   }
 
   // Side table pages: u16 pc offsets, then payloads.
-  for (SideTable *t : {&lsdaTable, &persTable}) {
+  for (SideTable *t : {&lsdaTable, &persTable, &pacTable}) {
     t->pages.clear();
     size_t w = t->payloadWidth;
     for (size_t i = 0; i < t->rows.size(); ++i) {
@@ -1595,8 +1644,10 @@ void CompactUnwindTable::Impl::write(uint8_t *buf, uint64_t hdrVA) {
         if (t->kind == cu::SideTableLSDA)
           write32(ctx, pay + 4 * j,
                   f.lsdaSym ? rel(f.lsdaSym->getVA(ctx, f.lsdaAddend)) : 0);
-        else
+        else if (t->kind == cu::SideTablePersonality)
           write16(ctx, pay + 2 * j, f.pers - 1);
+        else
+          write16(ctx, pay + 2 * j, uint16_t(*f.pacSite / 4));
       }
     }
     write32(ctx, buf + t->flOff + 8 * t->pages.size(), rel(endVA));
