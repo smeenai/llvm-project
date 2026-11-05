@@ -40,8 +40,6 @@
 // CHECK:      Personality: 6
 // CHECK:      Start: 0x21001C
 // CHECK:      Personality: 7
-// CHECK:      Start: 0x210020
-// CHECK:      Personality: 7
 // CHECK:      Kind: Personality (0x2)
 // CHECK:      0x21001c: 6
 // CHECK-NEXT: 0x210020: 7

@@ -7,14 +7,20 @@
 // RUN: llvm-readobj --unwind %t | FileCheck %s
 
 // CHECK:      Start: 0x210000
-// CHECK-NEXT: End: 0x210020
-// CHECK:      Mode: Escape
-// CHECK:      Start: 0x210020
-// CHECK-NEXT: End: 0x210080
-// CHECK:      Mode: Escape
-// CHECK:      Start: 0x210080
+// CHECK-NEXT: End: 0x210004
+// CHECK:      Mode: NULL
+// CHECK:      Start: 0x210004
+// CHECK-NEXT: End: 0x21000C
+// CHECK:      Mode: SP
+// CHECK:      Start: 0x21000C
+// CHECK-NEXT: End: 0x210024
+// CHECK:      Mode: NULL
+// CHECK:      Start: 0x210024
+// CHECK-NEXT: End: 0x21002C
+// CHECK:      Mode: SP
+// CHECK:      Start: 0x21002C
 // CHECK-NEXT: End: 0x210084
-// CHECK:      Mode: Escape
+// CHECK:      Mode: NULL
 
   .text
   .globl _start

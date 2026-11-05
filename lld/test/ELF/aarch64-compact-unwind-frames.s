@@ -10,39 +10,154 @@
 // RUN: llvm-readobj --unwind %t.sync | FileCheck %s --check-prefix=SYNC
 
 // ASYNC:      Start: 0x210000
-// ASYNC-NEXT: End: 0x21002C
-// ASYNC:      Mode: Escape
+// ASYNC-NEXT: End: 0x210004
+// ASYNC:      Mode: NULL
+// ASYNC-NEXT: Convention: LLVM
+// ASYNC-NEXT: N: 0
 // ASYNC:      0x210000: CFA=reg31
-// ASYNC-NEXT: 0x210004: CFA=reg31: reg34=1
-// ASYNC-NEXT: 0x210008: CFA=reg31+48: reg34=1
-// ASYNC-NEXT: 0x210014: CFA=reg29+32: reg19=[CFA-8], reg20=[CFA-16], reg29=[CFA-32], reg30=[CFA-24], reg34=1, reg72=[CFA-48]
-// ASYNC-NEXT: 0x210018: CFA=reg31+48: reg19=[CFA-8], reg20=[CFA-16], reg29=[CFA-32], reg30=[CFA-24], reg34=1, reg72=[CFA-48]
-// ASYNC-NEXT: 0x210024: CFA=reg31: reg34=1
-// ASYNC-NEXT: 0x210028: CFA=reg31
-// ASYNC:      Start: 0x21002C
-// ASYNC-NEXT: End: 0x210044
-// ASYNC:      Mode: Escape
-// ASYNC:      0x21002c: CFA=reg31
-// ASYNC-NEXT: 0x210030: CFA=reg31+32
-// ASYNC-NEXT: 0x210034: CFA=reg31+32: reg19=[CFA-8], reg30=[CFA-16], reg72=[CFA-32]
-// ASYNC-NEXT: 0x210040: CFA=reg31
-// ASYNC:      Start: 0x210044
-// ASYNC-NEXT: End: 0x210060
-// ASYNC:      Mode: Escape
-// ASYNC:      0x210044: CFA=reg31
-// ASYNC-NEXT: 0x210048: CFA=reg31: reg18=DW_OP_breg18 -8
-// ASYNC-NEXT: 0x21004c: CFA=reg31+16: reg18=DW_OP_breg18 -8
-// ASYNC-NEXT: 0x210050: CFA=reg29+16: reg18=DW_OP_breg18 -8, reg29=[CFA-16], reg30=[CFA-8]
-// ASYNC-NEXT: 0x210054: CFA=reg31+16: reg18=DW_OP_breg18 -8, reg29=[CFA-16], reg30=[CFA-8]
-// ASYNC-NEXT: 0x210058: CFA=reg31: reg18=DW_OP_breg18 -8
-// ASYNC-NEXT: 0x21005c: CFA=reg31
-// ASYNC:      Start: 0x210060
+// ASYNC:      Start: 0x210004
+// ASYNC-NEXT: End: 0x210008
+// ASYNC:      Mode: NULL
+// ASYNC-NEXT: Convention: LLVM
+// ASYNC-NEXT: N: 0
+// ASYNC-NEXT: RA: A
+// ASYNC:      0x210004: CFA=reg31: reg34=1
+// ASYNC:      Start: 0x210008
+// ASYNC-NEXT: End: 0x210014
+// ASYNC:      Mode: SP
+// ASYNC-NEXT: Convention: LLVM
+// ASYNC-NEXT: Registers:
+// ASYNC-NEXT: O: 0
+// ASYNC-NEXT: N: 3
+// ASYNC-NEXT: RA: A
+// ASYNC:      0x210008: CFA=reg31+48: reg34=1
+// ASYNC:      Start: 0x210014
+// ASYNC-NEXT: End: 0x210018
+// ASYNC:      Mode: FP
+// ASYNC-NEXT: Convention: LLVM
+// ASYNC-NEXT: Registers: x19, x20, x29, x30, d8
+// ASYNC-NEXT: FrameRecord: Yes
+// ASYNC-NEXT: O: 0
+// ASYNC-NEXT: N: 0
+// ASYNC-NEXT: RA: A
+// ASYNC:      0x210014: CFA=reg29+32: reg19=[CFA-8], reg20=[CFA-16], reg29=[CFA-32], reg30=[CFA-24], reg34=1, reg72=[CFA-48]
+// ASYNC:      Start: 0x210018
+// ASYNC-NEXT: End: 0x210024
+// ASYNC:      Mode: SP
+// ASYNC-NEXT: Convention: LLVM
+// ASYNC-NEXT: Registers: x19, x20, x29, x30, d8
+// ASYNC-NEXT: FrameRecord: Yes
+// ASYNC-NEXT: O: 0
+// ASYNC-NEXT: N: 3
+// ASYNC-NEXT: RA: A
+// ASYNC:      0x210018: CFA=reg31+48: reg19=[CFA-8], reg20=[CFA-16], reg29=[CFA-32], reg30=[CFA-24], reg34=1, reg72=[CFA-48]
+// ASYNC:      Start: 0x210024
+// ASYNC-NEXT: End: 0x210028
+// ASYNC:      Mode: NULL
+// ASYNC-NEXT: Convention: LLVM
+// ASYNC-NEXT: N: 0
+// ASYNC-NEXT: RA: A
+// ASYNC:      0x210024: CFA=reg31: reg34=1
+// ASYNC:      Start: 0x210028
+// ASYNC-NEXT: End: 0x210030
+// ASYNC:      Mode: NULL
+// ASYNC-NEXT: Convention: LLVM
+// ASYNC-NEXT: N: 0
+// ASYNC:      0x210028: CFA=reg31
+// ASYNC:      Start: 0x210030
+// ASYNC-NEXT: End: 0x210034
+// ASYNC:      Mode: SP
+// ASYNC-NEXT: Convention: LLVM
+// ASYNC-NEXT: Registers:
+// ASYNC-NEXT: O: 0
+// ASYNC-NEXT: N: 2
+// ASYNC:      0x210030: CFA=reg31+32
+// ASYNC:      Start: 0x210034
+// ASYNC-NEXT: End: 0x210040
+// ASYNC:      Mode: SP
+// ASYNC-NEXT: Convention: LLVM
+// ASYNC-NEXT: Registers: x19, x30, d8
+// ASYNC-NEXT: O: 0
+// ASYNC-NEXT: N: 2
+// ASYNC:      0x210034: CFA=reg31+32: reg19=[CFA-8], reg30=[CFA-16], reg72=[CFA-32]
+// ASYNC:      Start: 0x210040
+// ASYNC-NEXT: End: 0x210048
+// ASYNC:      Mode: NULL
+// ASYNC-NEXT: Convention: LLVM
+// ASYNC-NEXT: N: 0
+// ASYNC:      0x210040: CFA=reg31
+// ASYNC:      Start: 0x210048
+// ASYNC-NEXT: End: 0x21004C
+// ASYNC:      Mode: NULL
+// ASYNC-NEXT: Convention: LLVM
+// ASYNC-NEXT: ShadowCallStack: Yes
+// ASYNC-NEXT: N: 0
+// ASYNC:      0x210048: CFA=reg31: reg18=DW_OP_breg18 -8
+// ASYNC:      Start: 0x21004C
+// ASYNC-NEXT: End: 0x210050
+// ASYNC:      Mode: SP
+// ASYNC-NEXT: Convention: LLVM
+// ASYNC-NEXT: ShadowCallStack: Yes
+// ASYNC-NEXT: Registers:
+// ASYNC-NEXT: O: 0
+// ASYNC-NEXT: N: 1
+// ASYNC:      0x21004c: CFA=reg31+16: reg18=DW_OP_breg18 -8
+// ASYNC:      Start: 0x210050
+// ASYNC-NEXT: End: 0x210054
+// ASYNC:      Mode: FP
+// ASYNC-NEXT: Convention: LLVM
+// ASYNC-NEXT: ShadowCallStack: Yes
+// ASYNC-NEXT: Registers: x29, x30
+// ASYNC-NEXT: FrameRecord: Yes
+// ASYNC-NEXT: O: 0
+// ASYNC-NEXT: N: 0
+// ASYNC:      0x210050: CFA=reg29+16: reg18=DW_OP_breg18 -8, reg29=[CFA-16], reg30=[CFA-8]
+// ASYNC:      Start: 0x210054
+// ASYNC-NEXT: End: 0x210058
+// ASYNC:      Mode: SP
+// ASYNC-NEXT: Convention: LLVM
+// ASYNC-NEXT: ShadowCallStack: Yes
+// ASYNC-NEXT: Registers: x29, x30
+// ASYNC-NEXT: FrameRecord: Yes
+// ASYNC-NEXT: O: 0
+// ASYNC-NEXT: N: 1
+// ASYNC:      0x210054: CFA=reg31+16: reg18=DW_OP_breg18 -8, reg29=[CFA-16], reg30=[CFA-8]
+// ASYNC:      Start: 0x210058
+// ASYNC-NEXT: End: 0x21005C
+// ASYNC:      Mode: NULL
+// ASYNC-NEXT: Convention: LLVM
+// ASYNC-NEXT: ShadowCallStack: Yes
+// ASYNC-NEXT: N: 0
+// ASYNC:      0x210058: CFA=reg31: reg18=DW_OP_breg18 -8
+// ASYNC:      Start: 0x21005C
+// ASYNC-NEXT: End: 0x210064
+// ASYNC:      Mode: NULL
+// ASYNC-NEXT: Convention: LLVM
+// ASYNC-NEXT: N: 0
+// ASYNC:      0x21005c: CFA=reg31
+// ASYNC:      Start: 0x210064
+// ASYNC-NEXT: End: 0x210068
+// ASYNC:      Mode: SP
+// ASYNC-NEXT: Convention: LLVM
+// ASYNC-NEXT: Registers:
+// ASYNC-NEXT: O: 0
+// ASYNC-NEXT: N: 5
+// ASYNC:      0x210064: CFA=reg31+80
+// ASYNC:      Start: 0x210068
+// ASYNC-NEXT: End: 0x210078
+// ASYNC:      Mode: SP
+// ASYNC-NEXT: Convention: GCC
+// ASYNC-NEXT: Registers: x29, x30
+// ASYNC-NEXT: FrameRecord: Yes
+// ASYNC-NEXT: O: 1
+// ASYNC-NEXT: N: 5
+// ASYNC:      0x210068: CFA=reg31+80: reg29=[CFA-64], reg30=[CFA-56]
+// ASYNC:      Start: 0x210078
 // ASYNC-NEXT: End: 0x21007C
-// ASYNC:      Mode: Escape
-// ASYNC:      0x210060: CFA=reg31
-// ASYNC-NEXT: 0x210064: CFA=reg31+80
-// ASYNC-NEXT: 0x210068: CFA=reg31+80: reg29=[CFA-64], reg30=[CFA-56]
-// ASYNC-NEXT: 0x210078: CFA=reg31
+// ASYNC:      Mode: NULL
+// ASYNC-NEXT: Convention: LLVM
+// ASYNC-NEXT: N: 0
+// ASYNC:      0x210078: CFA=reg31
 // ASYNC:      Start: 0x21007C
 // ASYNC-NEXT: End: 0x2100A8
 // ASYNC:      Mode: Escape
@@ -52,83 +167,115 @@
 // ASYNC-NEXT: 0x210090: CFA=reg31+48: reg19=[CFA-32], reg20=[CFA-24], reg29=[CFA-48], reg30=[CFA-40], reg79=[CFA-16]
 // ASYNC-NEXT: 0x2100a4: CFA=reg31
 // ASYNC:      Start: 0x2100A8
-// ASYNC-NEXT: End: 0x2100D4
-// ASYNC:      Mode: Escape
+// ASYNC-NEXT: End: 0x2100AC
+// ASYNC:      Mode: NULL
+// ASYNC-NEXT: Convention: LLVM
+// ASYNC-NEXT: N: 0
 // ASYNC:      0x2100a8: CFA=reg31
-// ASYNC-NEXT: 0x2100ac: CFA=reg31+400
-// ASYNC-NEXT: 0x2100b0: CFA=reg31+400: reg29=[CFA-48], reg30=[CFA-40]
-// ASYNC-NEXT: 0x2100b8: CFA=reg31+400: reg19=[CFA-32], reg20=[CFA-24], reg29=[CFA-48], reg30=[CFA-40]
-// ASYNC-NEXT: 0x2100bc: CFA=reg31+400: reg19=[CFA-32], reg20=[CFA-24], reg21=[CFA-16], reg29=[CFA-48], reg30=[CFA-40]
-// ASYNC-NEXT: 0x2100d0: CFA=reg31
-// ASYNC:      Start: 0x2100D4
-// ASYNC-NEXT: End: 0x2100D8
-// ASYNC:      Mode: Escape
-// ASYNC:      0x2100d4: CFA=reg31
-// ASYNC:      Start: 0x2100D8
+// ASYNC:      Start: 0x2100AC
+// ASYNC-NEXT: End: 0x2100B0
+// ASYNC:      Mode: SP
+// ASYNC-NEXT: Convention: LLVM
+// ASYNC-NEXT: Registers:
+// ASYNC-NEXT: O: 0
+// ASYNC-NEXT: N: 25
+// ASYNC:      0x2100ac: CFA=reg31+400
+// ASYNC:      Start: 0x2100B0
+// ASYNC-NEXT: End: 0x2100B8
+// ASYNC:      Mode: SP
+// ASYNC-NEXT: Convention: LLVM
+// ASYNC-NEXT: Registers: x29, x30
+// ASYNC-NEXT: FrameRecord: Yes
+// ASYNC-NEXT: O: 2
+// ASYNC-NEXT: N: 25
+// ASYNC:      0x2100b0: CFA=reg31+400: reg29=[CFA-48], reg30=[CFA-40]
+// ASYNC:      Start: 0x2100B8
+// ASYNC-NEXT: End: 0x2100BC
+// ASYNC:      Mode: SP
+// ASYNC-NEXT: Convention: GCC CFA-anchored
+// ASYNC-NEXT: Registers: x19, x20, x29, x30
+// ASYNC-NEXT: FrameRecord: Yes
+// ASYNC-NEXT: O: 1
+// ASYNC-NEXT: N: 25
+// ASYNC:      0x2100b8: CFA=reg31+400: reg19=[CFA-32], reg20=[CFA-24], reg29=[CFA-48], reg30=[CFA-40]
+// ASYNC:      Start: 0x2100BC
+// ASYNC-NEXT: End: 0x2100D0
+// ASYNC:      Mode: SP
+// ASYNC-NEXT: Convention: GCC CFA-anchored
+// ASYNC-NEXT: Registers: x19, x20, x21, x29, x30
+// ASYNC-NEXT: FrameRecord: Yes
+// ASYNC-NEXT: O: 0
+// ASYNC-NEXT: N: 25
+// ASYNC:      0x2100bc: CFA=reg31+400: reg19=[CFA-32], reg20=[CFA-24], reg21=[CFA-16], reg29=[CFA-48], reg30=[CFA-40]
+// ASYNC:      Start: 0x2100D0
 // ASYNC-NEXT: End: 0x2100DC
-// ASYNC:      Mode: Escape
-// ASYNC:      0x2100d8: CFA=reg31
+// ASYNC:      Mode: NULL
+// ASYNC-NEXT: Convention: LLVM
+// ASYNC-NEXT: N: 0
+// ASYNC:      0x2100d0: CFA=reg31
 
 // SYNC:      SyncOnly (0x1)
 // SYNC:      Start: 0x210000
 // SYNC-NEXT: End: 0x21002C
-// SYNC:      Mode: Escape
-// SYNC:      0x210000: CFA=reg31
-// SYNC-NEXT: 0x210004: CFA=reg31: reg34=1
-// SYNC-NEXT: 0x210008: CFA=reg31+48: reg34=1
-// SYNC-NEXT: 0x210014: CFA=reg29+32: reg19=[CFA-8], reg20=[CFA-16], reg29=[CFA-32], reg30=[CFA-24], reg34=1, reg72=[CFA-48]
-// SYNC-NEXT: 0x210018: CFA=reg31+48: reg19=[CFA-8], reg20=[CFA-16], reg29=[CFA-32], reg30=[CFA-24], reg34=1, reg72=[CFA-48]
-// SYNC-NEXT: 0x210024: CFA=reg31: reg34=1
-// SYNC-NEXT: 0x210028: CFA=reg31
+// SYNC:      Mode: FP
+// SYNC-NEXT: Convention: LLVM
+// SYNC-NEXT: Registers: x19, x20, x29, x30, d8
+// SYNC-NEXT: FrameRecord: Yes
+// SYNC-NEXT: O: 0
+// SYNC-NEXT: N: 0
+// SYNC-NEXT: RA: A
+// SYNC:      0x210000: CFA=reg29+32: reg19=[CFA-8], reg20=[CFA-16], reg29=[CFA-32], reg30=[CFA-24], reg34=1, reg72=[CFA-48]
 // SYNC:      Start: 0x21002C
 // SYNC-NEXT: End: 0x210044
-// SYNC:      Mode: Escape
-// SYNC:      0x21002c: CFA=reg31
-// SYNC-NEXT: 0x210030: CFA=reg31+32
-// SYNC-NEXT: 0x210034: CFA=reg31+32: reg19=[CFA-8], reg30=[CFA-16], reg72=[CFA-32]
-// SYNC-NEXT: 0x210040: CFA=reg31
+// SYNC:      Mode: SP
+// SYNC-NEXT: Convention: LLVM
+// SYNC-NEXT: Registers: x19, x30, d8
+// SYNC-NEXT: O: 0
+// SYNC-NEXT: N: 2
+// SYNC:      0x21002c: CFA=reg31+32: reg19=[CFA-8], reg30=[CFA-16], reg72=[CFA-32]
 // SYNC:      Start: 0x210044
 // SYNC-NEXT: End: 0x210060
-// SYNC:      Mode: Escape
-// SYNC:      0x210044: CFA=reg31
-// SYNC-NEXT: 0x210048: CFA=reg31: reg18=DW_OP_breg18 -8
-// SYNC-NEXT: 0x21004c: CFA=reg31+16: reg18=DW_OP_breg18 -8
-// SYNC-NEXT: 0x210050: CFA=reg29+16: reg18=DW_OP_breg18 -8, reg29=[CFA-16], reg30=[CFA-8]
-// SYNC-NEXT: 0x210054: CFA=reg31+16: reg18=DW_OP_breg18 -8, reg29=[CFA-16], reg30=[CFA-8]
-// SYNC-NEXT: 0x210058: CFA=reg31: reg18=DW_OP_breg18 -8
-// SYNC-NEXT: 0x21005c: CFA=reg31
+// SYNC:      Mode: FP
+// SYNC-NEXT: Convention: LLVM
+// SYNC-NEXT: ShadowCallStack: Yes
+// SYNC-NEXT: Registers: x29, x30
+// SYNC-NEXT: FrameRecord: Yes
+// SYNC-NEXT: O: 0
+// SYNC-NEXT: N: 0
+// SYNC:      0x210044: CFA=reg29+16: reg18=DW_OP_breg18 -8, reg29=[CFA-16], reg30=[CFA-8]
 // SYNC:      Start: 0x210060
 // SYNC-NEXT: End: 0x21007C
-// SYNC:      Mode: Escape
-// SYNC:      0x210060: CFA=reg31
-// SYNC-NEXT: 0x210064: CFA=reg31+80
-// SYNC-NEXT: 0x210068: CFA=reg31+80: reg29=[CFA-64], reg30=[CFA-56]
-// SYNC-NEXT: 0x210078: CFA=reg31
+// SYNC:      Mode: SP
+// SYNC-NEXT: Convention: GCC
+// SYNC-NEXT: Registers: x29, x30
+// SYNC-NEXT: FrameRecord: Yes
+// SYNC-NEXT: O: 1
+// SYNC-NEXT: N: 5
+// SYNC:      0x210060: CFA=reg31+80: reg29=[CFA-64], reg30=[CFA-56]
 // SYNC:      Start: 0x21007C
 // SYNC-NEXT: End: 0x2100A8
-// SYNC:      Mode: Escape
-// SYNC:      0x21007c: CFA=reg31
-// SYNC-NEXT: 0x210080: CFA=reg31+48: reg29=[CFA-48], reg30=[CFA-40]
-// SYNC-NEXT: 0x210088: CFA=reg31+48: reg29=[CFA-48], reg30=[CFA-40], reg79=[CFA-16]
-// SYNC-NEXT: 0x210090: CFA=reg31+48: reg19=[CFA-32], reg20=[CFA-24], reg29=[CFA-48], reg30=[CFA-40], reg79=[CFA-16]
-// SYNC-NEXT: 0x2100a4: CFA=reg31
+// SYNC:      Mode: SP
+// SYNC-NEXT: Convention: GCC
+// SYNC-NEXT: Registers: x19, x20, x29, x30, d15
+// SYNC-NEXT: FrameRecord: Yes
+// SYNC-NEXT: O: 0
+// SYNC-NEXT: N: 3
+// SYNC:      0x21007c: CFA=reg31+48: reg19=[CFA-32], reg20=[CFA-24], reg29=[CFA-48], reg30=[CFA-40], reg79=[CFA-16]
 // SYNC:      Start: 0x2100A8
 // SYNC-NEXT: End: 0x2100D4
-// SYNC:      Mode: Escape
-// SYNC:      0x2100a8: CFA=reg31
-// SYNC-NEXT: 0x2100ac: CFA=reg31+400
-// SYNC-NEXT: 0x2100b0: CFA=reg31+400: reg29=[CFA-48], reg30=[CFA-40]
-// SYNC-NEXT: 0x2100b8: CFA=reg31+400: reg19=[CFA-32], reg20=[CFA-24], reg29=[CFA-48], reg30=[CFA-40]
-// SYNC-NEXT: 0x2100bc: CFA=reg31+400: reg19=[CFA-32], reg20=[CFA-24], reg21=[CFA-16], reg29=[CFA-48], reg30=[CFA-40]
-// SYNC-NEXT: 0x2100d0: CFA=reg31
+// SYNC:      Mode: SP
+// SYNC-NEXT: Convention: GCC CFA-anchored
+// SYNC-NEXT: Registers: x19, x20, x21, x29, x30
+// SYNC-NEXT: FrameRecord: Yes
+// SYNC-NEXT: O: 0
+// SYNC-NEXT: N: 25
+// SYNC:      0x2100a8: CFA=reg31+400: reg19=[CFA-32], reg20=[CFA-24], reg21=[CFA-16], reg29=[CFA-48], reg30=[CFA-40]
 // SYNC:      Start: 0x2100D4
-// SYNC-NEXT: End: 0x2100D8
-// SYNC:      Mode: Escape
-// SYNC:      0x2100d4: CFA=reg31
-// SYNC:      Start: 0x2100D8
 // SYNC-NEXT: End: 0x2100DC
-// SYNC:      Mode: Escape
-// SYNC:      0x2100d8: CFA=reg31
+// SYNC:      Mode: NULL
+// SYNC-NEXT: Convention: LLVM
+// SYNC-NEXT: N: 0
+// SYNC:      0x2100d4: CFA=reg31
 
   .text
   .globl _start

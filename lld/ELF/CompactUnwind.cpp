@@ -8,7 +8,9 @@
 //
 // AArch64 compact unwind tables (-z compact-unwind), which replace .eh_frame
 // and are written into .eh_frame_hdr (see
-// llvm/docs/AArch64ELFCompactUnwind.md). Each live FDE's CFI is rewritten as an
+// llvm/docs/AArch64ELFCompactUnwind.md). Each live FDE's CFI is split into
+// regions, each described by a 64-bit descriptor that is checked against every
+// CFI row it covers. CFI that no descriptor can express is rewritten as an
 // escape program, which the unwinder interprets as DWARF.
 //
 //===----------------------------------------------------------------------===//
@@ -28,9 +30,11 @@
 #include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/BinaryFormat/ELFCompactUnwind.h"
 #include "llvm/DebugInfo/DWARF/LowLevel/DWARFCFIProgram.h"
+#include "llvm/DebugInfo/DWARF/LowLevel/DWARFUnwindTable.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/LEB128.h"
 #include "llvm/Support/Parallel.h"
+#include <array>
 #include <optional>
 
 using namespace llvm;
@@ -43,7 +47,436 @@ namespace cu = llvm::ELFCompactUnwind;
 namespace a64 = llvm::ELFCompactUnwind::AArch64;
 
 namespace {
-constexpr unsigned kSP = 31;
+constexpr unsigned kSP = 31, kFP = 29;
+// Callee-saved register indices: x19-x28 are 0-9, x29 is 10, x30 is 11 and
+// d8-d15 are 12-19.
+using a64::FrameRecordCSRs;
+using a64::NumCSRs;
+
+int csrIndex(uint64_t reg) {
+  if (reg >= 19 && reg <= 30)
+    return reg - 19;
+  if (reg >= 72 && reg <= 79)
+    return reg - 72 + 12;
+  return -1;
+}
+
+// The rules at an instruction as the CFI gives them: what a descriptor's frame
+// says, plus the register offsets and the PAuth_LR modifier, which a
+// descriptor keeps in its shape.
+struct State : a64::Frame {
+  // Signed with the PC as a second modifier (PAuth_LR).
+  bool raPc = false;
+  std::array<int32_t, NumCSRs> off{};
+
+  // No frame: the CFA is SP and nothing is saved, apart from possibly the
+  // shadow call stack push.
+  bool isFrameless() const { return !CFAIsFP && CFAOffset == 0 && Saved == 0; }
+  bool operator==(const State &o) const {
+    if (CFAIsFP != o.CFAIsFP || CFAOffset != o.CFAOffset ||
+        RASigned != o.RASigned || raPc != o.raPc || X18 != o.X18 ||
+        Saved != o.Saved)
+      return false;
+    for (uint32_t m = Saved; m; m &= m - 1)
+      if (off[llvm::countr_zero(m)] != o.off[llvm::countr_zero(m)])
+        return false;
+    return true;
+  }
+  bool operator!=(const State &o) const { return !(*this == o); }
+};
+
+State toState(const a64::Shape &s, const a64::Frame &f) {
+  State st;
+  static_cast<a64::Frame &>(st) = f;
+  st.raPc = f.RASigned && s.WithPC;
+  for (uint32_t m = f.Saved; m; m &= m - 1)
+    st.off[llvm::countr_zero(m)] = s.Slots.Offsets[llvm::countr_zero(m)];
+  return st;
+}
+
+// A descriptor without its personality, and what it decodes to.
+struct Desc {
+  uint64_t bits = 0;
+  a64::Shape shape;
+};
+
+// Bits 3-4: 0 LLVM, 1 LLVM with a shadow call stack, 2 GCC sp-anchored, 3 GCC
+// CFA-anchored.
+uint64_t convBits(a64::Convention c, bool scs) {
+  return uint64_t(c == a64::ConvLLVM  ? (scs ? 1 : 0)
+                  : c == a64::ConvGCC ? 2
+                                      : 3)
+         << a64::ConvShift;
+}
+
+// The x19-x30 and d8-d15 masks and the frame record bit.
+uint64_t regBits(uint32_t r, bool frameRecord) {
+  return uint64_t(r & 0xfff) << a64::RegsShift |
+         uint64_t(frameRecord) << a64::FrameRecordShift |
+         uint64_t(r >> 12 & 0xff) << a64::DRegsShift;
+}
+
+struct Fn {
+  unsigned n = 0;
+  // The CIE's B key and non-hint PAuth instruction augmentations, which pick
+  // the RA scheme field.
+  bool bKey = false, nonHint = false;
+  SmallVector<unsigned, 8> starts;
+  SmallVector<State, 8> states;
+  SmallVector<unsigned, 0> calls;
+  // bodyCandidates' results, shared with the functions encoded alongside.
+  StringMap<SmallVector<Desc, 4>> *candidates = nullptr;
+
+  const State &at(unsigned i) const {
+    return states[llvm::upper_bound(starts, i) - starts.begin() - 1];
+  }
+};
+
+// 1/2: A/B key; 3/4: A/B with the PC (PACM hint); 5/6: A/B with the PC
+// (non-hint instructions).
+uint64_t raField(const Fn &fn, const State &st) {
+  if (!st.RASigned)
+    return 0;
+  return (st.raPc ? (fn.nonHint ? 5 : 3) : 1) + (fn.bKey ? 1 : 0);
+}
+
+// Interprets the CIE and FDE instructions over a function of the given size
+// with LLVM's CFI interpreter. Fills fn with the normalized rows when every row
+// is expressible; otherwise sets why. escapable is cleared for programs the
+// unwinder can't run from a copy.
+struct Interp {
+  StringRef why;
+  bool escapable = true;
+
+  // cieRow is the row the CIE's instructions set up, if the interpreter
+  // accepts them.
+  void run(const dwarf::CFIProgram &cie,
+           const std::optional<dwarf::UnwindRow> &cieRow,
+           const dwarf::CFIProgram &fde, uint64_t size, Fn &fn) {
+    fn.n = size / 4;
+    // What the rows don't show: positions that aren't relative to the
+    // function, the argument size, and PAuth_LR negations.
+    for (const dwarf::CFIProgram *p : {&cie, &fde}) {
+      for (const dwarf::CFIProgram::Instruction &inst : *p) {
+        switch (inst.Opcode) {
+        case DW_CFA_advance_loc:
+        case DW_CFA_advance_loc1:
+        case DW_CFA_advance_loc2:
+        case DW_CFA_advance_loc4:
+          if (p == &cie)
+            fail("cie_advance");
+          break;
+        case DW_CFA_set_loc:
+          return unescapable("set_loc");
+        case DW_CFA_GNU_args_size:
+          if (inst.Ops[0])
+            fail("args_size");
+          break;
+        case DW_CFA_AARCH64_negate_ra_state_with_pc:
+          fail("pauth_lr_negate");
+          break;
+        case DW_CFA_AARCH64_set_ra_state:
+          if (inst.Ops[0] > 2)
+            return unescapable("malformed");
+          break;
+        }
+      }
+    }
+    if (!why.empty())
+      return;
+    // Programs the interpreter rejects, such as GCC's DW_CFA_def_cfa_offset
+    // after a CFA expression, become escapes, which the unwinder runs as it
+    // would the FDE.
+    // Each row holds from its address to the next row's, and the last to the
+    // end of the function.
+    std::optional<dwarf::UnwindRow> prev;
+    auto add = [&](uint64_t end) {
+      uint64_t loc = prev->getAddress();
+      if (end <= loc || loc >= size || !why.empty())
+        return;
+      if (loc % 4)
+        return fail("unaligned_row");
+      State st;
+      if (!normalize(*prev, st) ||
+          (!fn.states.empty() && fn.states.back() == st))
+        return;
+      fn.starts.push_back(loc / 4);
+      fn.states.push_back(st);
+    };
+    if (!cieRow)
+      return fail("cfi_rule");
+    dwarf::UnwindRow row = *cieRow;
+    dwarf::RegisterLocations init = row.getRegisterLocations();
+    row.setAddress(0);
+    if (Error e =
+            dwarf::parseRows(fde, row, &init, [&](const dwarf::UnwindRow &r) {
+              if (prev)
+                add(r.getAddress());
+              prev = r;
+            })) {
+      consumeError(std::move(e));
+      return fail("cfi_rule");
+    }
+    if (prev)
+      add(row.getAddress());
+    prev = row;
+    add(size);
+  }
+
+private:
+  void fail(StringRef w) {
+    if (why.empty())
+      why = w;
+  }
+  void unescapable(StringRef w) {
+    escapable = false;
+    fail(w);
+  }
+  bool normalize(const dwarf::UnwindRow &row, State &st) {
+    using dwarf::UnwindLocation;
+    const UnwindLocation &cfa = row.getCFAValue();
+    if (cfa.getLocation() == UnwindLocation::DWARFExpr) {
+      fail("cfa_expression");
+      return false;
+    }
+    if (cfa.getLocation() == UnwindLocation::RegPlusOffset) {
+      if (cfa.getRegister() != kSP && cfa.getRegister() != kFP) {
+        fail("cfa_reg");
+        return false;
+      }
+      st.CFAIsFP = cfa.getRegister() == kFP;
+      st.CFAOffset = cfa.getOffset();
+    }
+    const dwarf::RegisterLocations &locs = row.getRegisterLocations();
+    for (const auto &[reg, loc] : locs) {
+      UnwindLocation::Location kind = loc.getLocation();
+      if (kind == UnwindLocation::Same || kind == UnwindLocation::Unspecified)
+        continue;
+      // The return address signing state (0: not signed, 1: signed, 2:
+      // signed with the PC; 3, from negating a PC-signed state, can't be
+      // expressed).
+      if (reg == 34 && kind == UnwindLocation::Constant) {
+        if (loc.getConstant() > 2) {
+          fail("pauth_lr_negate");
+          return false;
+        }
+        st.RASigned = loc.getConstant() != 0;
+        st.raPc = loc.getConstant() == 2;
+        continue;
+      }
+      // The shadow call stack push: x18 = DW_OP_breg18 -8.
+      if (reg == 18 && kind == UnwindLocation::DWARFExpr &&
+          !loc.getDereference()) {
+        std::optional<DWARFExpression> expr = loc.getDWARFExpressionBytes();
+        auto op = expr->begin();
+        if (op != expr->end() && std::next(op) == expr->end() &&
+            op->getCode() == DW_OP_breg18 &&
+            int64_t(op->getRawOperand(0)) == -8) {
+          st.X18 = true;
+          continue;
+        }
+      }
+      int ci = csrIndex(reg);
+      if (ci >= 0) {
+        if (kind == UnwindLocation::CFAPlusOffset && loc.getDereference()) {
+          st.Saved |= 1u << ci;
+          st.off[ci] = loc.getOffset();
+          continue;
+        }
+        fail(kind == UnwindLocation::Undefined ? "undefined_csr" : "reg_rule");
+        return false;
+      }
+      if (kind != UnwindLocation::Undefined) {
+        fail("saves_non_aapcs_reg");
+        return false;
+      }
+    }
+    return true;
+  }
+};
+
+//===----------------------------------------------------------------------===//
+// Region search (descriptor candidates, async regions, sync runs)
+//===----------------------------------------------------------------------===//
+
+// The descriptors whose body is st, smallest O first, then by convention. A
+// state that more than one convention describes gets LLVM's, which Clang's
+// other frames use, so that neighbouring regions' descriptors can match.
+const SmallVector<Desc, 4> &bodyCandidates(Fn &fn, const State &st) {
+  // The candidates depend on the state and the RA scheme.
+  uint64_t ra = raField(fn, st) << a64::RAShift;
+  SmallString<64> key;
+  auto put = [&](auto v) {
+    const char *p = reinterpret_cast<const char *>(&v);
+    key.append(p, p + sizeof(v));
+  };
+  put(uint8_t(st.CFAIsFP | st.RASigned << 1 | st.raPc << 2 | st.X18 << 3));
+  put(st.CFAOffset);
+  put(st.Saved);
+  for (uint32_t m = st.Saved; m; m &= m - 1)
+    put(st.off[llvm::countr_zero(m)]);
+  put(ra);
+  auto [it, inserted] = fn.candidates->try_emplace(key);
+  SmallVector<Desc, 4> &out = it->second;
+  if (!inserted)
+    return out;
+  auto add = [&](uint64_t bits) {
+    Desc d{bits, {}};
+    if (a64::decodeShape(bits, 0, d.shape) &&
+        toState(d.shape, a64::frameAt(d.shape, 1, 0)) == st)
+      out.push_back(d);
+  };
+  if (st.isFrameless()) {
+    add(a64::ModeNull | convBits(a64::ConvLLVM, st.X18) | ra);
+  } else {
+    uint32_t regs = st.Saved;
+    // A frame record has x29 just below x30, and d8-d15 sit below the
+    // general registers in LLVM's convention and above them in GCC's.
+    bool recordOk = (regs & FrameRecordCSRs) != FrameRecordCSRs ||
+                    st.off[a64::CSRX29] == st.off[a64::CSRX30] - 8;
+    int32_t gprLo = INT32_MAX, gprHi = INT32_MIN, fprLo = INT32_MAX,
+            fprHi = INT32_MIN;
+    for (uint32_t m = regs; m; m &= m - 1) {
+      int r = llvm::countr_zero(m);
+      int32_t &lo = r < 12 ? gprLo : fprLo, &hi = r < 12 ? gprHi : fprHi;
+      lo = std::min(lo, st.off[r]);
+      hi = std::max(hi, st.off[r]);
+    }
+    bool both = gprLo != INT32_MAX && fprLo != INT32_MAX;
+    bool fprBelow = both && fprHi < gprLo, fprAbove = both && fprLo > gprHi;
+    for (bool fr : {true, false}) {
+      // Frame-pointer frames need the frame record.
+      if (fr ? (regs & FrameRecordCSRs) != FrameRecordCSRs || !recordOk
+             : st.CFAIsFP)
+        continue;
+      for (a64::Convention conv :
+           {a64::ConvLLVM, a64::ConvGCC, a64::ConvGCCTop}) {
+        // The shadow call stack only exists with the LLVM convention.
+        if (conv == a64::ConvLLVM ? fprAbove : st.X18 || fprBelow)
+          continue;
+        unsigned N = 0;
+        if (!st.CFAIsFP || conv == a64::ConvGCC) {
+          if (st.CFAOffset % 16 || st.CFAOffset < 0 ||
+              st.CFAOffset / 16 > int(a64::MaxN))
+            continue;
+          N = st.CFAOffset / 16;
+        }
+        auto bitsFor = [&](unsigned O) {
+          return (st.CFAIsFP ? a64::ModeFP : a64::ModeSP) |
+                 convBits(conv, st.X18) | ra | regBits(regs, fr) |
+                 uint64_t(O) << a64::OShift | uint64_t(N) << a64::NShift;
+        };
+        // O moves every slot by the same 16·O bytes (up for GCC's
+        // sp-anchored convention, down for the others), so any saved
+        // register's offset gives it.
+        a64::Shape s0;
+        if (!a64::decodeShape(bitsFor(0), 0, s0))
+          continue;
+        int o = 0;
+        if (uint32_t m = regs & s0.Slots.Mask) {
+          int r = llvm::countr_zero(m);
+          int delta = conv == a64::ConvGCC ? st.off[r] - s0.Slots.Offsets[r]
+                                           : s0.Slots.Offsets[r] - st.off[r];
+          if (delta < 0 || delta % 16)
+            continue;
+          o = delta / 16;
+        }
+        if (o > int(st.CFAIsFP && conv == a64::ConvGCC ? 0 : a64::MaxO))
+          continue;
+        add(bitsFor(o));
+      }
+    }
+    llvm::stable_sort(out, [](const Desc &a, const Desc &b) {
+      return std::make_pair(a.shape.O, a.shape.Conv) <
+             std::make_pair(b.shape.O, b.shape.Conv);
+    });
+  }
+  return out;
+}
+
+// What the table needs of a region's descriptor.
+struct RegionDesc {
+  uint64_t bits;
+  RegionDesc(const Desc &d) : bits(d.bits) {}
+};
+using Regions = SmallVector<std::pair<unsigned, RegionDesc>, 2>;
+
+// One region per CFI state.
+bool encodeStates(Fn &fn, Regions &out) {
+  for (size_t k = 0; k < fn.states.size(); ++k) {
+    const SmallVector<Desc, 4> &cands = bodyCandidates(fn, fn.states[k]);
+    if (cands.empty())
+      return false;
+    out.push_back({fn.starts[k], cands[0]});
+  }
+  return true;
+}
+
+// Whether fn's CFI is shaped like Clang's synchronous CFI: after possibly
+// signing the return address and pushing to the shadow call stack, one row
+// describes the whole frame, which then holds to the end. Such CFI is only
+// meant to be right after that row, so its calls need not be found: calls
+// before it go to prologue helpers, which never unwind.
+bool describesFrameOnce(const Fn &fn) {
+  bool framed = !fn.states[0].isFrameless();
+  for (size_t k = 1; k < fn.states.size(); ++k) {
+    const State &a = fn.states[k - 1], &b = fn.states[k];
+    if (a == b)
+      continue;
+    if (framed || (a.RASigned && (!b.RASigned || a.raPc != b.raPc)) ||
+        (a.X18 && !b.X18))
+      return false;
+    framed = !b.isFrameless();
+  }
+  return true;
+}
+
+bool encodeSync(Fn &fn, bool frameOnce, Regions &out) {
+  SmallVector<std::pair<unsigned, const State *>, 8> cs;
+  if (frameOnce) {
+    cs.push_back({0, &fn.states.back()});
+  } else if (!fn.calls.empty()) {
+    for (unsigned c : fn.calls)
+      cs.push_back({c, &fn.at(c)});
+  } else {
+    // No calls: the state covering the most instructions.
+    SmallVector<std::pair<const State *, unsigned>, 8> lens;
+    for (size_t k = 0; k < fn.starts.size(); ++k) {
+      unsigned e = k + 1 < fn.starts.size() ? fn.starts[k + 1] : fn.n;
+      auto it = llvm::find_if(
+          lens, [&](auto &p) { return *p.first == fn.states[k]; });
+      if (it == lens.end())
+        lens.push_back({&fn.states[k], e - fn.starts[k]});
+      else
+        it->second += e - fn.starts[k];
+    }
+    auto best = lens.begin();
+    for (auto it = lens.begin(); it != lens.end(); ++it)
+      if (it->second > best->second)
+        best = it;
+    cs.push_back({0, best->first});
+  }
+  const State *prevSt = nullptr;
+  for (auto [c, st] : cs) {
+    if (prevSt && *prevSt == *st)
+      continue;
+    prevSt = st;
+    const SmallVector<Desc, 4> &cands = bodyCandidates(fn, *st);
+    if (cands.empty())
+      return false;
+    out.push_back({out.empty() ? 0 : c, cands[0]});
+  }
+  return true;
+}
+
+bool isCall(uint32_t insn) {
+  return (insn & 0xfc000000) == 0x94000000 || // bl
+         (insn & 0xfffffc1f) == 0xd63f0000 || // blr
+         (insn & 0xfffffc1f) == 0xd63f081f || // blraaz
+         (insn & 0xfffffc1f) == 0xd63f0c1f || // blrabz
+         (insn & 0xfffffc00) == 0xd73f0800 || // blraa
+         (insn & 0xfffffc00) == 0xd73f0c00;   // blrab
+}
 
 //===----------------------------------------------------------------------===//
 // CIE/FDE parsing
@@ -60,6 +493,7 @@ bool parseCfi(ArrayRef<uint8_t> insns, bool isLE, dwarf::CFIProgram &p) {
 struct Cie {
   EhCie eh;
   std::optional<dwarf::CFIProgram> cfi;
+  std::optional<dwarf::UnwindRow> initRow;
   StringRef err;
   bool bKey = false, signal = false, mte = false, nonHintPAuth = false;
   Symbol *pers = nullptr;
@@ -76,6 +510,13 @@ Cie readCie(const EhInputSection &sec, const EhSectionPiece &piece, bool isLE) {
   if (!parseCfi(c.eh.insns, isLE, *c.cfi)) {
     c.cfi.reset();
     c.err = "malformed";
+  } else {
+    dwarf::UnwindRow row;
+    if (Error e = dwarf::parseRows(*c.cfi, row, nullptr,
+                                   [](const dwarf::UnwindRow &) {}))
+      consumeError(std::move(e));
+    else
+      c.initRow = row;
   }
   StringRef aug = c.eh.aug;
   c.bKey = aug.contains('B');
@@ -98,7 +539,7 @@ Cie readCie(const EhInputSection &sec, const EhSectionPiece &piece, bool isLE) {
 }
 
 struct EncodedFn {
-  StringRef why; // why the function was dropped
+  StringRef why; // why the function needed an escape program or was dropped
   bool dropped = false;
   Symbol *sym = nullptr;
   int64_t addend = 0;
@@ -106,6 +547,7 @@ struct EncodedFn {
   const Cie *cie = nullptr;
   Symbol *lsdaSym = nullptr;
   int64_t lsdaAddend = 0;
+  Regions regions;
   std::string escape;
 };
 
@@ -240,6 +682,7 @@ struct CompactUnwindTable::Impl {
 
 void CompactUnwindTable::Impl::encode() {
   EhFrameSection &ehFrame = *ctx.in.ehFrame;
+  bool sync = kind == CompactUnwindKind::Sync;
 
   // Parse CIEs once per input section.
   SmallVector<SmallVector<Cie, 0>, 0> cies(ehFrame.sections.size());
@@ -262,9 +705,11 @@ void CompactUnwindTable::Impl::encode() {
       cies[i].push_back(readCie(*sec, cie, ctx.arg.isLE));
   });
 
-  // Functions are encoded in chunks, each reusing a CFI program.
+  // Functions are encoded in chunks, each reusing a CFI program and the
+  // candidates for the frame states it has seen.
   struct Scratch {
     std::optional<dwarf::CFIProgram> cfi;
+    StringMap<SmallVector<Desc, 4>> candidates;
   };
   SmallVector<EncodedFn, 0> enc(refs.size());
   auto encodeOne = [&](size_t i, Scratch &scratch) {
@@ -319,6 +764,61 @@ void CompactUnwindTable::Impl::encode() {
       return;
     }
 
+    Fn fn;
+    fn.candidates = &scratch.candidates;
+    fn.bKey = cie.bKey;
+    fn.nonHint = cie.nonHintPAuth;
+    Interp interp;
+    // Runs even when a descriptor is ruled out, to find the extent of the
+    // instructions for an escape program.
+    interp.run(*cie.cfi, cie.initRow, *cfi, range, fn);
+    if (cie.eh.raReg != 30)
+      interp.why = "ra_reg";
+    else if (cie.signal || cie.mte)
+      interp.why = cie.signal ? "signal_frame" : "mte_frame";
+    else if (range % 4)
+      interp.why = "odd_size";
+    if (interp.why.empty()) {
+      bool anyPc = false, anyPlain = false;
+      for (const State &st : fn.states) {
+        anyPc |= st.raPc;
+        anyPlain |= st.RASigned && !st.raPc;
+      }
+      if (anyPc)
+        interp.why = "pauth_lr";
+      // Non-hint PAuth instructions always sign with the PC.
+      else if (cie.nonHintPAuth && anyPlain)
+        interp.why = "non_hint_pauth";
+    }
+    if (interp.why.empty()) {
+      bool ok;
+      if (sync) {
+        bool frameOnce = describesFrameOnce(fn);
+        auto *def = dyn_cast<Defined>(out.sym);
+        auto *isec =
+            def ? dyn_cast_or_null<InputSection>(def->section) : nullptr;
+        uint64_t off = def ? def->value + out.addend : 0;
+        if (!frameOnce && isec && off + range <= isec->content().size()) {
+          ArrayRef<uint8_t> text = isec->content().slice(off, range);
+          for (unsigned k = 0; k < range / 4; ++k)
+            if (isCall(read32le(text.data() + 4 * k)))
+              fn.calls.push_back(k);
+        }
+        ok = encodeSync(fn, frameOnce, out.regions);
+      } else {
+        ok = encodeStates(fn, out.regions);
+      }
+      if (!ok)
+        interp.why = "region_constraints";
+    }
+    if (interp.why.empty())
+      return;
+    out.why = interp.why;
+    out.regions.clear();
+    if (!interp.escapable) {
+      out.dropped = true;
+      return;
+    }
     if (cie.eh.raReg != 30 ||
         !canonicalEscape(*cie.cfi, *cfi, ctx.arg.isLE, out.escape)) {
       out.why = "non_canonical_cfi";
@@ -368,19 +868,27 @@ void CompactUnwindTable::Impl::encode() {
     // Personality 7 means the personality side table has the index.
     uint64_t persBits = uint64_t(std::min<uint32_t>(f.pers, 7))
                         << a64::PersonalityShift;
-    auto [it, inserted] = escapeOffs.try_emplace(e.escape, escapes.size());
-    if (inserted)
-      escapes += e.escape;
-    // Program offset in the high word; flags for CIE augmentations (8
-    // signal frame S, 9 MTE-tagged frame G, 10 non-hint PAuth instructions
-    // N) and the personality in the low word.
-    uint64_t bits = a64::ModeEscape |
-                    uint64_t(cie.bKey ? 2 : 0) << a64::RAShift |
-                    uint64_t(cie.signal) << a64::EscSignalShift |
-                    uint64_t(cie.mte) << a64::EscMTEShift |
-                    uint64_t(cie.nonHintPAuth) << a64::EscNonHintShift |
-                    persBits | uint64_t(it->second) << a64::EscOffsetShift;
-    f.regions.push_back({0, getLDesc(bits, false)});
+    if (!e.escape.empty()) {
+      auto [it, inserted] = escapeOffs.try_emplace(e.escape, escapes.size());
+      if (inserted)
+        escapes += e.escape;
+      // Program offset in the high word; flags for CIE augmentations (8
+      // signal frame S, 9 MTE-tagged frame G, 10 non-hint PAuth instructions
+      // N) and the personality in the low word.
+      uint64_t bits = a64::ModeEscape |
+                      uint64_t(cie.bKey ? 2 : 0) << a64::RAShift |
+                      uint64_t(cie.signal) << a64::EscSignalShift |
+                      uint64_t(cie.mte) << a64::EscMTEShift |
+                      uint64_t(cie.nonHintPAuth) << a64::EscNonHintShift |
+                      persBits | uint64_t(it->second) << a64::EscOffsetShift;
+      f.regions.push_back({0, getLDesc(bits, false)});
+      funcs.push_back(std::move(f));
+      continue;
+    }
+    for (auto &[off, d] : e.regions) {
+      uint64_t bits = d.bits | persBits;
+      f.regions.push_back({off * 4, getLDesc(bits, true)});
+    }
     funcs.push_back(std::move(f));
   }
   noInfo = getLDesc(a64::ModeNoInfo, true);
