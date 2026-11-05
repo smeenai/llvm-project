@@ -37,6 +37,7 @@
 #include "llvm/Support/Threading.h"
 
 namespace lld::elf {
+class CompactUnwindTable;
 class Defined;
 struct PhdrEntry;
 class SymbolTableBaseSection;
@@ -47,12 +48,20 @@ public:
   EhFrameSection(Ctx &);
   void writeTo(uint8_t *buf) override;
   void finalizeContents() override;
-  bool isNeeded() const override { return isLive() && !sections.empty(); }
+  bool hasRecords() const { return isLive() && !sections.empty(); }
+  bool isNeeded() const override { return hasRecords(); }
   size_t getSize() const override { return size; }
 
   static bool classof(const SectionBase *d) {
     return SyntheticSection::classof(d) && d->name == ".eh_frame";
   }
+
+  // With compact unwind tables, the records are parsed for the table but not
+  // output; only the terminator is. References into .eh_frame resolve to the
+  // terminator, so code that registers .eh_frame with __register_frame_info,
+  // like crtbegin.o, registers an empty one rather than an address outside any
+  // section.
+  bool omitted = false;
 
   SmallVector<EhInputSection *, 0> sections;
   size_t numFdes = 0;
@@ -70,6 +79,7 @@ private:
 class EhFrameHeader final : public SyntheticSection {
 public:
   EhFrameHeader(Ctx &);
+  ~EhFrameHeader();
   void writeTo(uint8_t *buf) override;
   size_t getSize() const override { return size; }
   bool isNeeded() const override;
@@ -80,6 +90,7 @@ public:
   size_t size = 0;
 
 private:
+  std::unique_ptr<CompactUnwindTable> compactUnwind;
   struct FdeData {
     int64_t pcRel;
     int64_t fdeVARel;

@@ -1458,6 +1458,9 @@ void EhInputSection::preprocessRelocs(Relocs<RelTy> elfRels) {
 
 // Return the offset in an output section for a given input offset.
 uint64_t EhInputSection::getParentOffset(uint64_t offset) const {
+  // Only the terminator is output; see EhFrameSection::omitted.
+  if (auto *eh = cast_or_null<EhFrameSection>(getParent()); eh && eh->omitted)
+    return 0;
   auto it = partition_point(
       fdes, [=](EhSectionPiece p) { return p.inputOff <= offset; });
   if (it == fdes.begin() || it[-1].inputOff + it[-1].size <= offset) {

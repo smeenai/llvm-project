@@ -11,6 +11,7 @@
 #include "ARMErrataFix.h"
 #include "BPSectionOrderer.h"
 #include "CallGraphSort.h"
+#include "CompactUnwind.h"
 #include "Config.h"
 #include "InputFiles.h"
 #include "LinkerScript.h"
@@ -1924,6 +1925,8 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     // called after processSymbolAssignments() because it needs to know whether
     // a linker-script-defined symbol is absolute.
     scanRelocations<ELFT>(ctx);
+    if (ctx.arg.zCompactUnwind != CompactUnwindKind::None)
+      requestCompactUnwindGotEntries(ctx);
 
     // Process symbols referenced by the embedded unoptimized part of dynamic
     // debugging. Report references to undefined symbols and ensure that

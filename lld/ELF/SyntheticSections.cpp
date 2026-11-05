@@ -14,6 +14,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "SyntheticSections.h"
+#include "CompactUnwind.h"
 #include "Config.h"
 #include "DWARF.h"
 #include "EhFrame.h"
@@ -320,10 +321,16 @@ void EhFrameSection::finalizeContents() {
   // terminator. Thus we add one unconditionally.
   off += 4;
 
-  this->size = off;
+  if (ctx.arg.zCompactUnwind != CompactUnwindKind::None)
+    omitted = true;
+  this->size = omitted ? 4 : off;
 }
 
 void EhFrameSection::writeTo(uint8_t *buf) {
+  if (omitted) {
+    write32(ctx, buf, 0);
+    return;
+  }
   parallelForEach(sections, [&](EhInputSection *sec) {
     for (EhSectionPiece &cie : sec->cies)
       if (cie.outputOff != -1)
@@ -345,13 +352,26 @@ void EhFrameSection::writeTo(uint8_t *buf) {
 }
 
 EhFrameHeader::EhFrameHeader(Ctx &ctx)
-    : SyntheticSection(ctx, ".eh_frame_hdr", SHT_PROGBITS, SHF_ALLOC, 4) {}
+    : SyntheticSection(ctx, ".eh_frame_hdr", SHT_PROGBITS, SHF_ALLOC, 4) {
+  if (ctx.arg.zCompactUnwind != CompactUnwindKind::None) {
+    compactUnwind = std::make_unique<CompactUnwindTable>(ctx);
+    addralign = 8;
+  }
+}
+
+EhFrameHeader::~EhFrameHeader() = default;
 
 bool EhFrameHeader::isNeeded() const {
-  return isLive() && ctx.in.ehFrame->isNeeded();
+  return isLive() && ctx.in.ehFrame->hasRecords();
 }
 
 void EhFrameHeader::finalizeContents() {
+  if (compactUnwind) {
+    // The layout depends on function addresses, which aren't assigned yet;
+    // updateAllocSize computes it.
+    compactUnwind->encode();
+    return;
+  }
   // Compute size: 4-byte header + eh_frame_ptr + fde_count + FDE table.
   // Initially `large` is false; updateAllocSize may set it to true if addresses
   // exceed the 32-bit range, then call finalizeContents again.
@@ -428,6 +448,13 @@ bool EhFrameHeader::updateAllocSize(Ctx &ctx) {
   // This is called after `finalizeSynthetic`, so in the typical case without
   // .relr.dyn, this function will not change the size and assignAddresses
   // will not need another iteration.
+  if (compactUnwind) {
+    // The table's layout depends on function addresses. It never shrinks, so
+    // that the addresses converge.
+    size_t oldSize = size;
+    size = std::max(size, compactUnwind->layout(getVA()));
+    return size != oldSize;
+  }
   EhFrameSection *ehFrame = ctx.in.ehFrame.get();
 
   // Determine if 64-bit encodings are needed.
@@ -452,6 +479,13 @@ bool EhFrameHeader::updateAllocSize(Ctx &ctx) {
 }
 
 void EhFrameHeader::writeTo(uint8_t *buf) {
+  if (compactUnwind) {
+    if (compactUnwind->layout(getVA()) > size)
+      Err(ctx) << ".eh_frame_hdr: compact unwind table grew after layout";
+    else
+      compactUnwind->write(buf, getVA());
+    return;
+  }
   SmallVector<FdeData, 0> fdes = getFdeData();
   int64_t ehFramePtr = ctx.in.ehFrame->getParent()->addr - getVA() - 4;
   auto writeField = [&](uint8_t *buf, uint64_t val) {

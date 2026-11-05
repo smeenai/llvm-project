@@ -369,6 +369,8 @@ static void checkOptions(Ctx &ctx) {
       ErrAlways(ctx) << "-z gcs-report-dynamic only supported on AArch64";
     if (ctx.arg.zGcs != GcsPolicy::Implicit)
       ErrAlways(ctx) << "-z gcs only supported on AArch64";
+    if (ctx.arg.zCompactUnwind != CompactUnwindKind::None)
+      ErrAlways(ctx) << "-z compact-unwind only supported on AArch64";
   }
 
   if (ctx.arg.emachine != EM_AARCH64 && ctx.arg.emachine != EM_ARM &&
@@ -438,6 +440,8 @@ static void checkOptions(Ctx &ctx) {
       ErrAlways(ctx) << "-r and --gdb-index may not be used together";
     if (ctx.arg.icf != ICFLevel::None)
       ErrAlways(ctx) << "-r and --icf may not be used together";
+    if (ctx.arg.zCompactUnwind != CompactUnwindKind::None)
+      ErrAlways(ctx) << "-r and -z compact-unwind may not be used together";
     if (ctx.arg.pie)
       ErrAlways(ctx) << "-r and -pie may not be used together";
     if (ctx.arg.exportDynamic)
@@ -560,6 +564,25 @@ static GcsPolicy getZGcs(Ctx &ctx, opt::InputArgList &args) {
       else
         Err(ctx) << "unknown -z gcs= value '" << kv.second << "'";
     }
+  }
+  return ret;
+}
+
+static CompactUnwindKind getZCompactUnwind(Ctx &ctx, opt::InputArgList &args) {
+  auto ret = CompactUnwindKind::None;
+  for (auto *arg : args.filtered(OPT_z)) {
+    std::pair<StringRef, StringRef> kv = StringRef(arg->getValue()).split('=');
+    if (kv.first != "compact-unwind" && kv.first != "nocompact-unwind")
+      continue;
+    arg->claim();
+    if (kv.first == "nocompact-unwind")
+      ret = CompactUnwindKind::None;
+    else if (kv.second.empty() || kv.second == "async")
+      ret = CompactUnwindKind::Async;
+    else if (kv.second == "sync")
+      ret = CompactUnwindKind::Sync;
+    else
+      Err(ctx) << "unknown -z compact-unwind= value '" << kv.second << "'";
   }
   return ret;
 }
@@ -1672,6 +1695,10 @@ static void readConfigs(Ctx &ctx, opt::InputArgList &args) {
   ctx.arg.zZicfilp = getZZicfilp(ctx, args);
   ctx.arg.zZicfiss = getZZicfiss(ctx, args);
   ctx.arg.zGcs = getZGcs(ctx, args);
+  ctx.arg.zCompactUnwind = getZCompactUnwind(ctx, args);
+  // The table is written into .eh_frame_hdr.
+  if (ctx.arg.zCompactUnwind != CompactUnwindKind::None)
+    ctx.arg.ehFrameHdr = true;
   ctx.arg.zGlobal = hasZOption(args, "global");
   ctx.arg.zGnustack = getZGnuStack(args);
   ctx.arg.zHazardplt = hasZOption(args, "hazardplt");

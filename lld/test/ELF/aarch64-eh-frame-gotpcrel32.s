@@ -13,6 +13,17 @@
 // CHECK:      Augmentation: "zPR"
 // CHECK:      Personality Address: [[#%.16x,GOT]]
 
+/// -z compact-unwind's personality table refers to the same GOT entry.
+// RUN: ld.lld -shared -z compact-unwind %t.o -o %t.cu.so
+// RUN: llvm-readelf -S %t.cu.so > %t.cu.txt
+// RUN: llvm-readobj --unwind %t.cu.so >> %t.cu.txt
+// RUN: FileCheck %s --check-prefix=CU < %t.cu.txt
+
+// CU:      .got PROGBITS [[#%x,GOT:]]
+// CU:      Personalities [
+// CU-NEXT:   0: 0x[[#%x,GOT]]
+// CU-NEXT: ]
+
   .text
   .globl pers
 pers:

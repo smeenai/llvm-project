@@ -146,6 +146,9 @@ enum LtoKind : uint8_t {UnifiedThin, UnifiedRegular, Default};
 // For -z gcs=
 enum class GcsPolicy { Implicit, Never, Always };
 
+// For -z compact-unwind=
+enum class CompactUnwindKind { None, Async, Sync };
+
 // For -z zicfilp=
 enum class ZicfilpPolicy { Implicit, Never, Unlabeled, FuncSig };
 
@@ -472,6 +475,7 @@ struct Config {
   UnresolvedPolicy unresolvedSymbolsInShlib;
   Target2Policy target2;
   GcsPolicy zGcs;
+  CompactUnwindKind zCompactUnwind;
   bool power10Stubs;
   ARMVFPArgKind armVFPArgs = ARMVFPArgKind::Default;
   BuildIdKind buildId = BuildIdKind::None;
