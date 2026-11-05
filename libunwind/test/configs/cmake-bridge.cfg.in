@@ -55,3 +55,9 @@ if not objcopy_path:
 if objcopy_path:
     config.substitutions.append(('%{objcopy}', objcopy_path))
     config.available_features.add('objcopy-available')
+
+# In a build of LLVM with the runtimes, the lld built alongside them, which
+# supports everything the tests ask of it. Another lld may be too old.
+if @LLVM_TREE_AVAILABLE@ and os.path.exists('@LLVM_TOOLS_BINARY_DIR@/ld.lld'):
+    config.substitutions.append(('%{lld}', '@LLVM_TOOLS_BINARY_DIR@/ld.lld'))
+    config.available_features.add('lld')

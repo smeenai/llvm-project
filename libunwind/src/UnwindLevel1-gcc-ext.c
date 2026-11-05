@@ -220,6 +220,11 @@ _LIBUNWIND_EXPORT const void *_Unwind_Find_FDE(const void *pc,
   __unw_init_local(&cursor, &uc);
   __unw_set_reg(&cursor, UNW_REG_IP, (unw_word_t)(intptr_t)pc);
   __unw_get_proc_info(&cursor, &info);
+#if defined(_LIBUNWIND_ELF_COMPACT_FORMAT)
+  // Frames described by a compact unwind table have no FDE.
+  if (info.format == _LIBUNWIND_ELF_COMPACT_FORMAT)
+    return NULL;
+#endif
   bases->tbase = (uintptr_t)info.extra;
   bases->dbase = 0; // dbase not used on Mac OS X
   bases->func = (uintptr_t)info.start_ip;

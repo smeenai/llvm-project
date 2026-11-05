@@ -21,6 +21,7 @@
 #include "config.h"
 #include "dwarf2.h"
 #include "EHHeaderParser.hpp"
+#include "ElfCompactUnwind.hpp"
 #include "Registers.hpp"
 
 #ifndef _LIBUNWIND_USE_DLADDR
@@ -429,6 +430,15 @@ static bool checkForUnwindInfoSegment(const Elf_Phdr *phdr, size_t image_base,
     uintptr_t eh_frame_hdr_start = image_base + phdr->p_vaddr;
     cbdata->sects->dwarf_index_section = eh_frame_hdr_start;
     cbdata->sects->dwarf_index_section_length = phdr->p_memsz;
+#if defined(_LIBUNWIND_SUPPORT_ELF_COMPACT_UNWIND)
+    // A compact unwind table replaces the search table and .eh_frame.
+    if (phdr->p_memsz != 0 && ElfCompactUnwind<LocalAddressSpace>::isCompact(
+                                  *cbdata->addressSpace, eh_frame_hdr_start)) {
+      cbdata->sects->dwarf_section = 0;
+      cbdata->sects->dwarf_section_length = 0;
+      return true;
+    }
+#endif
     if (EHHeaderParser<LocalAddressSpace>::decodeEHHdr(
             *cbdata->addressSpace, eh_frame_hdr_start,
             eh_frame_hdr_start + phdr->p_memsz, hdrInfo)) {
@@ -652,6 +662,15 @@ inline bool LocalAddressSpace::findUnwindSections(
     // `_dl_find_object` does not give us the size of PT_GNU_EH_FRAME.
     // Setting length to `SIZE_MAX` effectively disables all range checks.
     info.dwarf_index_section_length = SIZE_MAX;
+#if defined(_LIBUNWIND_SUPPORT_ELF_COMPACT_UNWIND)
+    // A compact unwind table replaces the search table and .eh_frame.
+    if (ElfCompactUnwind<LocalAddressSpace>::isCompact(
+            *this, info.dwarf_index_section)) {
+      info.dwarf_section = 0;
+      info.dwarf_section_length = 0;
+      return true;
+    }
+#endif
     EHHeaderParser<LocalAddressSpace>::EHHeaderInfo hdrInfo;
     if (!EHHeaderParser<LocalAddressSpace>::decodeEHHdr(
             *this, info.dwarf_index_section,

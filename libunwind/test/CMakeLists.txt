@@ -32,6 +32,7 @@ pythonize_bool(LIBUNWIND_ENABLE_CET)
 pythonize_bool(LIBUNWIND_ENABLE_GCS)
 pythonize_bool(LIBUNWIND_ENABLE_THREADS)
 pythonize_bool(LIBUNWIND_USES_ARM_EHABI)
+pythonize_bool(LLVM_TREE_AVAILABLE)
 
 file(WRITE "${CMAKE_BINARY_DIR}/check_cfi_set_ra_state.s" "
     .text

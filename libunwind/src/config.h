@@ -64,6 +64,12 @@
   #endif
 #endif
 
+#if defined(_LIBUNWIND_SUPPORT_DWARF_INDEX) && defined(_LIBUNWIND_TARGET_AARCH64)
+  #define _LIBUNWIND_SUPPORT_ELF_COMPACT_UNWIND 1
+  // unw_proc_info_t::format of frames described by a compact unwind table.
+  #define _LIBUNWIND_ELF_COMPACT_FORMAT 0x45430000
+#endif
+
 #ifdef _LIBUNWIND_TRACE_RET_INJECT
 #define _LIBUNWIND_TRACE_NO_INLINE __attribute__((noinline, disable_tail_calls))
 #else

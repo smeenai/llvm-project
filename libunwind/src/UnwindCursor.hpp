@@ -64,6 +64,7 @@
 #include "config.h"
 #include "DwarfInstructions.hpp"
 #include "EHHeaderParser.hpp"
+#include "ElfCompactUnwind.hpp"
 #include "libunwind.h"
 #include "libunwind_ext.h"
 #include "Registers.hpp"
@@ -1125,6 +1126,24 @@ private:
   }
 #endif
 
+#if defined(_LIBUNWIND_SUPPORT_ELF_COMPACT_UNWIND)
+  bool getInfoFromElfCompactUnwind(pint_t pc, const UnwindInfoSections &sects);
+  int stepWithElfCompactUnwind(bool stage2) {
+    typename CFI_Parser<A>::PrologInfo prolog;
+    typename CFI_Parser<A>::CIE_Info cieInfo;
+    pint_t pacSite = ElfCompactUnwind<A>::signsWithPC(_info.unwind_info)
+                         ? (pint_t)_info.extra
+                         : 0;
+    if (!ElfCompactUnwind<A>::template decode<R>(
+            _addressSpace, _info.unwind_info, _info.flags,
+            (pint_t)_info.start_ip, _info.unwind_info_size, pacSite, &prolog,
+            &cieInfo))
+      return UNW_EBADFRAME;
+    return DwarfInstructions<A, R>::stepWithPrologInfo(
+        _addressSpace, prolog, cieInfo, _registers, _isSignalFrame, stage2);
+  }
+#endif
+
 #if defined(_LIBUNWIND_SUPPORT_COMPACT_UNWIND)
   bool getInfoFromCompactEncodingSection(typename R::link_hardened_reg_arg_t pc,
                                          const UnwindInfoSections &sects);
@@ -1902,6 +1921,35 @@ bool UnwindCursor<A, R>::getInfoFromDwarfSection(
 }
 #endif // defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
 
+#if defined(_LIBUNWIND_SUPPORT_ELF_COMPACT_UNWIND)
+template <typename A, typename R>
+bool UnwindCursor<A, R>::getInfoFromElfCompactUnwind(
+    pint_t pc, const UnwindInfoSections &sects) {
+  typename ElfCompactUnwind<A>::Info info;
+  if (!ElfCompactUnwind<A>::findInfo(_addressSpace, sects.dwarf_index_section,
+                                     pc, info) ||
+      (info.desc & 7) >= aarch64_compact_unwind::kModeNoInfo)
+    return false;
+  _info.start_ip = info.funcStart;
+  _info.end_ip = info.regionEnd;
+  _info.lsda = info.lsda;
+  _info.handler = info.personality;
+  _info.gp = 0;
+  _info.format = ElfCompactUnwind<A>::kFormat;
+  // What stepWithElfCompactUnwind needs: the descriptor in unwind_info, the
+  // pc's offset into its region in unwind_info_size, the region length, layout
+  // descriptor or escape program in flags, and for a return address signed
+  // with the PC, the PAuth_LR signing site in extra (otherwise the DSO base,
+  // as for DWARF frames).
+  _info.unwind_info = info.desc;
+  _info.unwind_info_size = static_cast<uint32_t>(pc - info.regionStart);
+  _info.flags = info.aux;
+  _info.extra = ElfCompactUnwind<A>::signsWithPC(info.desc)
+                    ? static_cast<unw_word_t>(info.pacSite)
+                    : static_cast<unw_word_t>(sects.dso_base);
+  return true;
+}
+#endif
 
 #if defined(_LIBUNWIND_SUPPORT_COMPACT_UNWIND)
 template <typename A, typename R>
@@ -3024,6 +3072,16 @@ void UnwindCursor<A, R>::setInfoBasedOnIPRegister(bool isReturnAddress) {
       return;
 #endif
 
+#if defined(_LIBUNWIND_SUPPORT_ELF_COMPACT_UNWIND)
+    // If there is a compact unwind table, which replaces .eh_frame, look
+    // there next.
+    if (R::getArch() == REGISTERS_ARM64 && sects.dwarf_index_section != 0 &&
+        ElfCompactUnwind<A>::isCompact(_addressSpace,
+                                       sects.dwarf_index_section) &&
+        this->getInfoFromElfCompactUnwind((pint_t)pc, sects))
+      return;
+#endif
+
 #if defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
     // If there is dwarf unwind info, look there next.
     if (sects.dwarf_section != 0) {
@@ -3549,7 +3607,12 @@ template <typename A, typename R> int UnwindCursor<A, R>::step(bool stage2) {
 #elif defined(_LIBUNWIND_SUPPORT_TBTAB_UNWIND)
     result = this->stepWithTBTableData();
 #elif defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
-    result = this->stepWithDwarfFDE(stage2);
+#if defined(_LIBUNWIND_SUPPORT_ELF_COMPACT_UNWIND)
+    if (_info.format == ElfCompactUnwind<A>::kFormat)
+      result = this->stepWithElfCompactUnwind(stage2);
+    else
+#endif
+      result = this->stepWithDwarfFDE(stage2);
 #elif defined(_LIBUNWIND_ARM_EHABI)
     result = this->stepWithEHABI();
 #else
