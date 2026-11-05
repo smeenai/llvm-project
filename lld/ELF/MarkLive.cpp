@@ -20,6 +20,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "MarkLive.h"
+#include "EhFrame.h"
 #include "InputFiles.h"
 #include "InputSection.h"
 #include "LinkerScript.h"
@@ -69,7 +70,7 @@ private:
   void markParallel();
 
   template <class RelTy>
-  void resolveReloc(InputSectionBase &sec, const RelTy &rel, bool fromFDE);
+  void resolveReloc(InputSectionBase &sec, const RelTy &rel);
 
   void scanEhFrameSection(EhInputSection &eh);
 
@@ -81,6 +82,9 @@ private:
   // There are normally few input sections whose names are valid C
   // identifiers, so we just store a SmallVector instead of a multimap.
   DenseMap<StringRef, SmallVector<InputSectionBase *, 0>> cNamedSections;
+
+  // The LSDAs of each function section, which are alive if it is.
+  DenseMap<InputSectionBase *, TinyPtrVector<InputSection *>> lsdas;
 
   // The most proximate reason that something is live. This forms a DAG between
   // LiveItems. Acyclicality is maintained by only admitting the first
@@ -113,8 +117,7 @@ static uint64_t getAddend(Ctx &, InputSectionBase &sec,
 template <class ELFT, bool TrackWhyLive>
 template <class RelTy>
 void MarkLive<ELFT, TrackWhyLive>::resolveReloc(InputSectionBase &sec,
-                                                const RelTy &rel,
-                                                bool fromFDE) {
+                                                const RelTy &rel) {
   // If a symbol is referenced in a live section, it is used.
   Symbol *sym;
   if constexpr (std::is_same_v<RelTy, Relocation>) {
@@ -151,30 +154,18 @@ void MarkLive<ELFT, TrackWhyLive>::resolveReloc(InputSectionBase &sec,
         return;
     }
 
-    // fromFDE being true means this is referenced by a FDE in a .eh_frame
-    // piece. The relocation points to the described function or to a LSDA. We
-    // only need to keep the LSDA live, so ignore anything that points to
-    // executable sections. If the LSDA is in a section group or has the
-    // SHF_LINK_ORDER flag, we ignore the relocation as well because (a) if the
-    // associated text section is live, the LSDA will be retained due to section
-    // group/SHF_LINK_ORDER rules (b) if the associated text section should be
-    // discarded, marking the LSDA will unnecessarily retain the text section.
-    if (!(fromFDE && std::is_same_v<RelTy, Relocation> &&
-          ((relSec->flags & (SHF_EXECINSTR | SHF_LINK_ORDER)) ||
-           relSec->nextInSectionGroup))) {
-      Symbol *canonicalSym = d;
-      if (TrackWhyLive && d->isSection()) {
-        // This is expensive, so ideally this would be deferred until it's known
-        // whether this reference contributes to a printed whyLive chain, but
-        // that determination cannot be made without knowing the enclosing
-        // symbol.
-        if (Symbol *s = relSec->getEnclosingSymbol(offset))
-          canonicalSym = s;
-        else
-          canonicalSym = nullptr;
-      }
-      enqueue(relSec, offset, canonicalSym, reason);
+    Symbol *canonicalSym = d;
+    if (TrackWhyLive && d->isSection()) {
+      // This is expensive, so ideally this would be deferred until it's known
+      // whether this reference contributes to a printed whyLive chain, but
+      // that determination cannot be made without knowing the enclosing
+      // symbol.
+      if (Symbol *s = relSec->getEnclosingSymbol(offset))
+        canonicalSym = s;
+      else
+        canonicalSym = nullptr;
     }
+    enqueue(relSec, offset, canonicalSym, reason);
     return;
   }
 
@@ -186,20 +177,16 @@ void MarkLive<ELFT, TrackWhyLive>::resolveReloc(InputSectionBase &sec,
     enqueue(sec, /*offset=*/0, /*sym=*/nullptr, reason);
 }
 
-// The .eh_frame section is an unfortunate special case.
-// The section is divided in CIEs and FDEs and the relocations it can have are
-// * CIEs can refer to a personality function.
-// * FDEs can refer to a LSDA
-// * FDEs refer to the function they contain information about
-// The last kind of relocation cannot keep the referred section alive, or they
-// would keep everything alive in a common object file. In fact, each FDE is
-// alive if the section it refers to is alive.
-// To keep things simple, in here we just ignore the last relocation kind. The
-// other two keep the referred section alive.
+// The .eh_frame section is an unfortunate special case. It is divided into CIEs
+// and FDEs. A CIE can refer to a personality routine, which it keeps alive. An
+// FDE refers to the function it describes and possibly to the function's LSDA,
+// but these references can't keep anything alive, or they would keep everything
+// alive in a common object file. Instead, an FDE is alive if its function is,
+// and so is the LSDA.
 //
 // A possible improvement would be to fully process .eh_frame in the middle of
-// the gc pass. With that we would be able to also gc some sections holding
-// LSDAs and personality functions if we found that they were unused.
+// the gc pass, so that personality routines only used by dead functions could
+// be garbage collected too.
 template <class ELFT, bool TrackWhyLive>
 void MarkLive<ELFT, TrackWhyLive>::scanEhFrameSection(EhInputSection &eh) {
   if (TrackWhyLive)
@@ -208,7 +195,7 @@ void MarkLive<ELFT, TrackWhyLive>::scanEhFrameSection(EhInputSection &eh) {
   ArrayRef<Relocation> rels = eh.rels;
   for (const EhSectionPiece &cie : eh.cies)
     if (cie.firstRelocation != unsigned(-1))
-      resolveReloc(eh, rels[cie.firstRelocation], false);
+      resolveReloc(eh, rels[cie.firstRelocation]);
   for (const EhSectionPiece &fde : eh.fdes) {
     size_t firstRelI = fde.firstRelocation;
     if (firstRelI == (unsigned)-1)
@@ -216,8 +203,9 @@ void MarkLive<ELFT, TrackWhyLive>::scanEhFrameSection(EhInputSection &eh) {
     uint64_t pieceEnd = fde.inputOff + fde.size;
     for (size_t j = firstRelI, end2 = rels.size();
          j < end2 && rels[j].offset < pieceEnd; ++j)
-      resolveReloc(eh, rels[j], true);
+      rels[j].sym->setFlags(USED);
   }
+  forEachFdeLsda(eh, [&](const FdeLsda &l) { lsdas[l.fn].push_back(l.lsda); });
 }
 
 // Some sections are used directly by the loader, so they should never be
@@ -498,15 +486,18 @@ void MarkLive<ELFT, TrackWhyLive>::mark() {
 
     const RelsOrRelas<ELFT> rels = sec.template relsOrRelas<ELFT>();
     for (const typename ELFT::Rel &rel : rels.rels)
-      resolveReloc(sec, rel, false);
+      resolveReloc(sec, rel);
     for (const typename ELFT::Rela &rel : rels.relas)
-      resolveReloc(sec, rel, false);
+      resolveReloc(sec, rel);
     for (const typename ELFT::Crel &rel : rels.crels)
-      resolveReloc(sec, rel, false);
+      resolveReloc(sec, rel);
 
     for (InputSectionBase *isec : sec.dependentSections)
       enqueue(isec, /*offset=*/0, /*sym=*/nullptr,
               {&sec, "depended on by section"});
+    if (auto it = lsdas.find(&sec); it != lsdas.end())
+      for (InputSection *lsda : it->second)
+        enqueue(lsda, /*offset=*/0, /*sym=*/nullptr, {&sec, "LSDA of"});
 
     // Mark the next group member.
     if (sec.nextInSectionGroup)
@@ -524,6 +515,7 @@ static void processSectionEdges(
     Ctx &ctx, InputSectionBase &sec,
     const DenseMap<StringRef, SmallVector<InputSectionBase *, 0>>
         &cNamedSections,
+    const DenseMap<InputSectionBase *, TinyPtrVector<InputSection *>> &lsdas,
     Fn fn) {
   auto resolveEdge = [&](const auto &rel) {
     Symbol &sym = sec.file->getRelocTargetSym(rel);
@@ -561,6 +553,9 @@ static void processSectionEdges(
     resolveEdge(rel);
   for (InputSectionBase *isec : sec.dependentSections)
     fn(isec, 0);
+  if (auto it = lsdas.find(&sec); it != lsdas.end())
+    for (InputSection *lsda : it->second)
+      fn(lsda, 0);
   if (sec.nextInSectionGroup)
     fn(sec.nextInSectionGroup, 0);
 }
@@ -575,7 +570,7 @@ void MarkLive<ELFT, TrackWhyLive>::markParallel() {
                    SmallVector<InputSection *, 0> &localQueue,
                    auto &self) -> void {
     processSectionEdges<ELFT>(
-        ctx, sec, cNamedSections,
+        ctx, sec, cNamedSections, lsdas,
         [&](InputSectionBase *target, uint64_t offset) {
           auto &part =
               reinterpret_cast<std::atomic<uint8_t> &>(target->partition);

@@ -210,6 +210,46 @@ bool elf::hasZeroPcRange(const EhInputSection &sec, const EhSectionPiece &p,
   return true;
 }
 
+void elf::forEachFdeLsda(const EhInputSection &sec,
+                         llvm::function_ref<void(const FdeLsda &)> fn) {
+  // The CIEs with an LSDA, and their personality routines.
+  SmallVector<std::optional<EhCie>, 0> cies;
+  SmallVector<const Relocation *, 0> pers;
+  for (const EhSectionPiece &p : sec.cies) {
+    EhCie cie = parseCie(sec, p);
+    const Relocation *r = nullptr;
+    if (cie.aug.contains('P') && p.firstRelocation != unsigned(-1) &&
+        sec.rels[p.firstRelocation].offset == p.inputOff + cie.persOff)
+      r = &sec.rels[p.firstRelocation];
+    pers.push_back(r);
+    cies.push_back(cie.lsdaEnc == DW_EH_PE_omit ? std::nullopt
+                                                : std::optional(cie));
+  }
+  for (const EhSectionPiece &p : sec.fdes) {
+    const std::optional<EhCie> &cie = cies[p.cie];
+    if (!cie || p.firstRelocation == unsigned(-1))
+      continue;
+    // The first relocation is pc_begin; find the one for the LSDA pointer.
+    uint64_t lsdaOff = p.inputOff + parseFde(sec, p, *cie).lsdaOff;
+    const Relocation *lsdaRel = nullptr;
+    for (size_t i = p.firstRelocation + 1;
+         i < sec.rels.size() && sec.rels[i].offset <= lsdaOff; ++i)
+      if (sec.rels[i].offset == lsdaOff)
+        lsdaRel = &sec.rels[i];
+    if (!lsdaRel)
+      continue;
+    auto *f = dyn_cast<Defined>(sec.rels[p.firstRelocation].sym);
+    auto *l = dyn_cast<Defined>(lsdaRel->sym);
+    auto *fSec = f ? dyn_cast_or_null<InputSection>(f->section) : nullptr;
+    auto *lSec = l ? dyn_cast_or_null<InputSection>(l->section) : nullptr;
+    if (!fSec || !lSec)
+      continue;
+    const Relocation *r = pers[p.cie];
+    fn({fSec, lSec, l->value + lsdaRel->addend, r ? r->sym : nullptr,
+        r ? r->addend : 0});
+  }
+}
+
 EhCie EhReader::readCie() {
   EhCie c;
   const uint8_t *start = d.data();

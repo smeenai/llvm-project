@@ -78,6 +78,9 @@
 # PREEMPTABLE: error: relocation R_RISCV_SUB_ULEB128 cannot be used against symbol 'w1'; recompile with -fPIC
 
 #--- a.s
+## The LSDA's function must be live for --gc-sections to keep the LSDA.
+.globl f
+f:
 .cfi_startproc
 .cfi_lsda 0x1b,.LLSDA0
 .cfi_endproc

@@ -11,11 +11,14 @@
 
 #include "lld/Common/LLVM.h"
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/STLFunctionalExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/BinaryFormat/Dwarf.h"
 
 namespace lld::elf {
 class EhInputSection;
+class InputSection;
+class Symbol;
 struct EhSectionPiece;
 
 struct EhCie {
@@ -44,6 +47,20 @@ uint8_t getFdeEncoding(const EhInputSection &sec, const EhSectionPiece &p);
 bool hasLSDA(const EhInputSection &sec, const EhSectionPiece &p);
 bool hasZeroPcRange(const EhInputSection &sec, const EhSectionPiece &p,
                     uint8_t enc);
+
+// An FDE's function and LSDA, and the personality routine, if any, that
+// interprets the LSDA.
+struct FdeLsda {
+  InputSection *fn;
+  InputSection *lsda;
+  uint64_t lsdaOff;
+  Symbol *pers;
+  int64_t persAddend;
+};
+
+// Calls fn for each FDE in sec whose function and LSDA are in input sections.
+void forEachFdeLsda(const EhInputSection &sec,
+                    llvm::function_ref<void(const FdeLsda &)> fn);
 }
 
 #endif
