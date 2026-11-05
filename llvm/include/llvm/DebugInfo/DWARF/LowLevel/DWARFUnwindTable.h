@@ -9,6 +9,7 @@
 #ifndef LLVM_DEBUGINFO_DWARF_LOWLEVEL_DWARFUNWINDTABLE_H
 #define LLVM_DEBUGINFO_DWARF_LOWLEVEL_DWARFUNWINDTABLE_H
 
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/DebugInfo/DWARF/LowLevel/DWARFCFIProgram.h"
 #include "llvm/DebugInfo/DWARF/LowLevel/DWARFExpression.h"
@@ -157,14 +158,21 @@ public:
 
 /// A class that can track all registers with locations in a UnwindRow object.
 ///
-/// Register locations use a map where the key is the register number and the
-/// the value is a UnwindLocation.
+/// Register locations are kept sorted by register number. A row describes few
+/// registers and is copied for every row of a table and on
+/// DW_CFA_remember_state, so they are stored inline rather than in a tree.
 ///
 /// The register maps are put into a class so that all register locations can
 /// be copied when parsing the unwind opcodes DW_CFA_remember_state and
 /// DW_CFA_restore_state.
 class RegisterLocations {
-  std::map<uint32_t, UnwindLocation> Locations;
+  SmallVector<std::pair<uint32_t, UnwindLocation>, 8> Locations;
+
+  auto find(uint32_t RegNum) const {
+    return llvm::lower_bound(Locations, RegNum, [](const auto &L, uint32_t R) {
+      return L.first < R;
+    });
+  }
 
 public:
   /// Return the location for the register in \a RegNum if there is a location.
@@ -174,8 +182,8 @@ public:
   /// \returns A location if one is available for \a RegNum, or std::nullopt
   /// otherwise.
   std::optional<UnwindLocation> getRegisterLocation(uint32_t RegNum) const {
-    auto Pos = Locations.find(RegNum);
-    if (Pos == Locations.end())
+    auto Pos = find(RegNum);
+    if (Pos == Locations.end() || Pos->first != RegNum)
       return std::nullopt;
     return Pos->second;
   }
@@ -197,14 +205,22 @@ public:
   ///
   /// \param Location the UnwindLocation that describes how to unwind the value.
   void setRegisterLocation(uint32_t RegNum, const UnwindLocation &Location) {
-    Locations.erase(RegNum);
-    Locations.insert(std::make_pair(RegNum, Location));
+    auto Pos = find(RegNum);
+    if (Pos != Locations.end() && Pos->first == RegNum)
+      Locations[Pos - Locations.begin()].second = Location;
+    else
+      Locations.insert(Locations.begin() + (Pos - Locations.begin()),
+                       {RegNum, Location});
   }
 
   /// Removes any rule for the register in \a RegNum.
   ///
   /// \param RegNum the register number to remove the location for.
-  void removeRegisterLocation(uint32_t RegNum) { Locations.erase(RegNum); }
+  void removeRegisterLocation(uint32_t RegNum) {
+    auto Pos = find(RegNum);
+    if (Pos != Locations.end() && Pos->first == RegNum)
+      Locations.erase(Locations.begin() + (Pos - Locations.begin()));
+  }
 
   /// Returns true if we have any register locations in this object.
   bool hasLocations() const { return !Locations.empty(); }

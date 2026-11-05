@@ -43,7 +43,7 @@ public:
 
 private:
   MCInstrInfo const &MCII;
-  SmallVector<DWARFCFIAnalysis> UIAs;
+  SmallVector<DWARFCFIAnalysis, 0> UIAs;
 };
 
 } // namespace llvm
