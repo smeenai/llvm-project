@@ -29,6 +29,7 @@ XRayExample
 FaultMaps
 Atomics
 ExceptionHandling
+AArch64ELFCompactUnwind
 Extensions
 AlignedBundling
 HowToSetUpLLVMStyleRTTI
@@ -166,6 +167,9 @@ XRayFDRFormat
 {doc}`ExceptionHandling`
 :   This document describes the design and implementation of exception handling
     in LLVM.
+
+{doc}`AArch64ELFCompactUnwind`
+:   The compact unwind tables that replace `.eh_frame` on AArch64 ELF.
 
 {doc}`Extensions`
 :   LLVM-specific extensions to tools and formats LLVM seeks compatibility with.

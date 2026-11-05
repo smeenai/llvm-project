@@ -9,9 +9,11 @@
 #ifndef LLVM_TOOLS_LLVM_READOBJ_DWARFCFIEHPRINTER_H
 #define LLVM_TOOLS_LLVM_READOBJ_DWARFCFIEHPRINTER_H
 
+#include "ELFCompactUnwindPrinter.h"
 #include "llvm-readobj.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/BinaryFormat/Dwarf.h"
+#include "llvm/BinaryFormat/ELFCompactUnwind.h"
 #include "llvm/DebugInfo/DWARF/DWARFCFIPrinter.h"
 #include "llvm/DebugInfo/DWARF/DWARFContext.h"
 #include "llvm/DebugInfo/DWARF/DWARFDataExtractor.h"
@@ -113,6 +115,14 @@ void PrinterContext<ELFT>::printEHFrameHdr(const Elf_Phdr *EHFramePHdr) const {
   Expected<ArrayRef<uint8_t>> Content = Obj.getSegmentContents(*EHFramePHdr);
   if (!Content)
     reportError(Content.takeError(), ObjF.getFileName());
+
+  if (Obj.getHeader().e_machine == ELF::EM_AARCH64 && !Content->empty() &&
+      (*Content)[0] == ELFCompactUnwind::Version) {
+    printELFCompactUnwindTable(W, *Content, EHFrameHdrAddress,
+                               ELFT::Endianness == llvm::endianness::little,
+                               ObjF.getFileName());
+    return;
+  }
 
   DataExtractor DE(*Content, ELFT::Endianness == llvm::endianness::little);
 

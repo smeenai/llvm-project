@@ -1,0 +1,160 @@
+## Check that llvm-readobj reports malformed AArch64 compact unwind tables.
+
+# RUN: yaml2obj --docnum=1 %s -o %t.trunc
+# RUN: not llvm-readobj --unwind %t.trunc 2>&1 | FileCheck %s -DFILE=%t.trunc --check-prefix=TRUNC
+# TRUNC: error: '[[FILE]]': compact unwind table: the header is truncated
+
+# RUN: yaml2obj --docnum=2 %s -o %t.page
+# RUN: not llvm-readobj --unwind %t.page 2>&1 | FileCheck %s -DFILE=%t.page --check-prefix=PAGE
+# PAGE: error: '[[FILE]]': compact unwind table: offset 0x1000 is out of range
+
+# RUN: yaml2obj --docnum=3 %s -o %t.escape
+# RUN: not llvm-readobj --unwind %t.escape 2>&1 | FileCheck %s -DFILE=%t.escape --check-prefix=ESCAPE
+# ESCAPE: error: '[[FILE]]': compact unwind table: escape program at 0x14c is out of range
+
+# RUN: yaml2obj --docnum=4 %s -o %t.layout
+# RUN: not llvm-readobj --unwind %t.layout 2>&1 | FileCheck %s -DFILE=%t.layout --check-prefix=LAYOUT
+# LAYOUT: error: '[[FILE]]': compact unwind table: global descriptor 0 has local layout descriptor 0
+
+## Version 3 is a compact unwind table on AArch64 only.
+# RUN: yaml2obj --docnum=5 %s -o %t.x86
+# RUN: not llvm-readobj --unwind %t.x86 2>&1 | FileCheck %s -DFILE=%t.x86 --check-prefix=X86
+# X86: error: '[[FILE]]': only version 1 of .eh_frame_hdr is supported
+
+## The header is truncated.
+--- !ELF
+FileHeader:
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_DYN
+  Machine: EM_AARCH64
+Sections:
+  - Name:         .eh_frame_hdr
+    Type:         SHT_PROGBITS
+    Flags:        [ SHF_ALLOC ]
+    Address:      0x20000
+    ContentArray: [
+                    0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00           ## version 3, then nothing
+                  ]
+ProgramHeaders:
+  - Type:     PT_GNU_EH_FRAME
+    Flags:    [ PF_R ]
+    VAddr:    0x20000
+    FirstSec: .eh_frame_hdr
+    LastSec:  .eh_frame_hdr
+
+## The page is past the end of the table.
+--- !ELF
+FileHeader:
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_DYN
+  Machine: EM_AARCH64
+Sections:
+  - Name:         .eh_frame_hdr
+    Type:         SHT_PROGBITS
+    Flags:        [ SHF_ALLOC ]
+    Address:      0x20000
+    ContentArray: [
+                    0x03, 0x00, 0x00, 0x00,                                  ## version 3
+                    0x01, 0x00, 0x00, 0x00, 0x2c, 0x00, 0x00, 0x00,          ## 1 page, first level at 0x2c
+                    0x00, 0x00, 0x00, 0x00, 0x2c, 0x00, 0x00, 0x00,          ## no global descriptors
+                    0x00, 0x00, 0x00, 0x00, 0x2c, 0x00, 0x00, 0x00,          ## no personalities
+                    0x00, 0x00, 0x00, 0x00, 0x2c, 0x00, 0x00, 0x00,          ## no side tables
+                    0x3c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,          ## no escapes, at 0x3c
+                    0x00, 0x00, 0xff, 0xff, 0x00, 0x10, 0x00, 0x00,          ## page 0: pc 0x10000 at 0x1000
+                    0x10, 0x00, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00           ## end 0x10010
+                  ]
+ProgramHeaders:
+  - Type:     PT_GNU_EH_FRAME
+    Flags:    [ PF_R ]
+    VAddr:    0x20000
+    FirstSec: .eh_frame_hdr
+    LastSec:  .eh_frame_hdr
+
+## The escape program is past the end of the escape area.
+--- !ELF
+FileHeader:
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_DYN
+  Machine: EM_AARCH64
+Sections:
+  - Name:         .eh_frame_hdr
+    Type:         SHT_PROGBITS
+    Flags:        [ SHF_ALLOC ]
+    Address:      0x20000
+    ContentArray: [
+                    0x03, 0x00, 0x00, 0x00,                                  ## version 3
+                    0x01, 0x00, 0x00, 0x00, 0x2c, 0x00, 0x00, 0x00,          ## 1 page, first level at 0x2c
+                    0x00, 0x00, 0x00, 0x00, 0x2c, 0x00, 0x00, 0x00,          ## no global descriptors
+                    0x00, 0x00, 0x00, 0x00, 0x2c, 0x00, 0x00, 0x00,          ## no personalities
+                    0x00, 0x00, 0x00, 0x00, 0x2c, 0x00, 0x00, 0x00,          ## no side tables
+                    0x4c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,          ## no escapes, at 0x4c
+                    0x00, 0x00, 0xff, 0xff, 0x3c, 0x00, 0x00, 0x00,          ## page 0: pc 0x10000 at 0x3c
+                    0x10, 0x00, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,          ## end 0x10010
+                    0x01, 0x00, 0x08, 0x00,                                  ## 1 entry, local descriptors at +8
+                    0x00, 0x00, 0x00, 0x00,                                  ## 0x10000: descriptor 0
+                    0x03, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00           ## local 0: escape, program at 0x100
+                  ]
+ProgramHeaders:
+  - Type:     PT_GNU_EH_FRAME
+    Flags:    [ PF_R ]
+    VAddr:    0x20000
+    FirstSec: .eh_frame_hdr
+    LastSec:  .eh_frame_hdr
+
+## A global PARTIAL descriptor names a local layout descriptor, which would mean
+## something different in each page.
+--- !ELF
+FileHeader:
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_DYN
+  Machine: EM_AARCH64
+Sections:
+  - Name:         .eh_frame_hdr
+    Type:         SHT_PROGBITS
+    Flags:        [ SHF_ALLOC ]
+    Address:      0x20000
+    ContentArray: [
+                    0x03, 0x00, 0x00, 0x00,                                  ## version 3
+                    0x01, 0x00, 0x00, 0x00, 0x34, 0x00, 0x00, 0x00,          ## 1 page, first level at 0x34
+                    0x01, 0x00, 0x00, 0x00, 0x2c, 0x00, 0x00, 0x00,          ## 1 global descriptor at 0x2c
+                    0x00, 0x00, 0x00, 0x00, 0x34, 0x00, 0x00, 0x00,          ## no personalities
+                    0x00, 0x00, 0x00, 0x00, 0x34, 0x00, 0x00, 0x00,          ## no side tables
+                    0x54, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,          ## no escapes, at 0x54
+                    0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,          ## global 0: PARTIAL SP, layout descriptor 1
+                    0x00, 0x00, 0xff, 0xff, 0x44, 0x00, 0x00, 0x00,          ## page 0: pc 0x10000 at 0x44
+                    0x10, 0x00, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,          ## end 0x10010
+                    0x01, 0x00, 0x08, 0x00,                                  ## 1 entry, local descriptors at +8
+                    0x00, 0x00, 0x00, 0x00,                                  ## 0x10000: descriptor 0
+                    0x12, 0x03, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x00           ## local 0 (descriptor 1): SP GCC frame record x19, x20
+                  ]
+ProgramHeaders:
+  - Type:     PT_GNU_EH_FRAME
+    Flags:    [ PF_R ]
+    VAddr:    0x20000
+    FirstSec: .eh_frame_hdr
+    LastSec:  .eh_frame_hdr
+
+--- !ELF
+FileHeader:
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_DYN
+  Machine: EM_X86_64
+Sections:
+  - Name:         .eh_frame_hdr
+    Type:         SHT_PROGBITS
+    Flags:        [ SHF_ALLOC ]
+    Address:      0x20000
+    ContentArray: [
+                    0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00           ## version 3, then nothing
+                  ]
+ProgramHeaders:
+  - Type:     PT_GNU_EH_FRAME
+    Flags:    [ PF_R ]
+    VAddr:    0x20000
+    FirstSec: .eh_frame_hdr
+    LastSec:  .eh_frame_hdr

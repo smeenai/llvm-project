@@ -1,0 +1,461 @@
+## Check that llvm-readobj --unwind dumps AArch64 compact unwind tables, which
+## .eh_frame_hdr holds in place of the binary search table when its version is
+## 3: the header, the personality routines, the global descriptors, each region
+## with its descriptor and the unwind rows it implies, and the side tables.
+
+## A little-endian table with every kind of descriptor: an FP region with a
+## prologue and an epilogue, NULL, PARTIAL with global and local layout
+## descriptors, escape, no unwind info, and PAuth_LR signing sites found from N
+## and from a side table.
+# RUN: yaml2obj --docnum=1 %s -o %t.le
+# RUN: llvm-readobj --unwind %t.le | FileCheck %s --check-prefix=LE
+# RUN: llvm-readelf --unwind %t.le | FileCheck %s --check-prefix=LE
+
+# LE:      EHFrameHeader {
+# LE-NEXT:   Address: 0x20000
+# LE-NEXT:   Offset: 0x118
+# LE-NEXT:   Size: 0x146
+# LE-NEXT:   Corresponding Section: .eh_frame_hdr
+# LE-NEXT:   CompactUnwindTable {
+# LE-NEXT:     Version: 3
+# LE-NEXT:     Flags [ (0x0)
+# LE-NEXT:     ]
+# LE-NEXT:     PageCount: 1
+# LE-NEXT:     FirstLevelOffset: 0x70
+# LE-NEXT:     GlobalDescriptorCount: 2
+# LE-NEXT:     GlobalDescriptorOffset: 0x60
+# LE-NEXT:     PersonalityCount: 2
+# LE-NEXT:     PersonalityOffset: 0x2C
+# LE-NEXT:     SideTableCount: 3
+# LE-NEXT:     SideTableDirectoryOffset: 0x38
+# LE-NEXT:     EscapeOffset: 0x140
+# LE-NEXT:     EscapeSize: 0x6
+# LE-NEXT:     Personalities [
+# LE-NEXT:       0: 0x30000
+# LE-NEXT:       1: 0x30008
+# LE-NEXT:     ]
+# LE-NEXT:     GlobalDescriptors [
+# LE-NEXT:       0: 0x0000000000000000
+# LE-NEXT:       1: 0x00000000001c0312
+# LE-NEXT:     ]
+# LE-NEXT:     Regions [
+# LE-NEXT:       Region {
+# LE-NEXT:         Start: 0x10000
+# LE-NEXT:         End: 0x10048
+# LE-NEXT:         Descriptor: 0x00030030203c0321 (local 0)
+# LE-NEXT:         Mode: FP
+# LE-NEXT:         Convention: LLVM
+# LE-NEXT:         Registers: x19, x20, x29, x30, d8
+# LE-NEXT:         FrameRecord: Yes
+# LE-NEXT:         O: 0
+# LE-NEXT:         N: 3
+# LE-NEXT:         RA: A
+# LE-NEXT:         Personality: 1
+# LE-NEXT:         Prologue: apos=1 PS=5
+# LE-NEXT:         Epilogue: window=3 tail=2
+# LE-NEXT:         Rows [
+# LE-NEXT:           0x10000: CFA=reg31
+# LE-NEXT:           0x10004: CFA=reg31: reg34=1
+# LE-NEXT:           0x10008: CFA=reg31+48: reg34=1
+# LE-NEXT:           0x10014: CFA=reg29+32: reg19=[CFA-8], reg20=[CFA-16], reg29=[CFA-32], reg30=[CFA-24], reg34=1, reg72=[CFA-48]
+# LE-NEXT:           0x10034: CFA=reg31+48: reg19=[CFA-8], reg20=[CFA-16], reg29=[CFA-32], reg30=[CFA-24], reg34=1, reg72=[CFA-48]
+# LE-NEXT:           0x10040: CFA=reg31: reg34=1
+# LE-NEXT:           0x10044: CFA=reg31
+# LE-NEXT:         ]
+# LE-NEXT:       }
+# LE-NEXT:       Region {
+# LE-NEXT:         Start: 0x10048
+# LE-NEXT:         End: 0x10050
+# LE-NEXT:         Descriptor: 0x0000000000000000 (global 0)
+# LE-NEXT:         Mode: NULL
+# LE-NEXT:         Convention: LLVM
+# LE-NEXT:         N: 0
+# LE-NEXT:         Rows [
+# LE-NEXT:           0x10048: CFA=reg31
+# LE-NEXT:         ]
+# LE-NEXT:       }
+# LE-NEXT:       Region {
+# LE-NEXT:         Start: 0x10050
+# LE-NEXT:         End: 0x10058
+# LE-NEXT:         Descriptor: 0x00010030000c0005 (local 1)
+# LE-NEXT:         Mode: PARTIAL SP
+# LE-NEXT:         Layout: global 1
+# LE-NEXT:         Convention: GCC
+# LE-NEXT:         Registers: x19, x20, x29, x30
+# LE-NEXT:         Saved: x29, x30
+# LE-NEXT:         FrameRecord: Yes
+# LE-NEXT:         O: 0
+# LE-NEXT:         N: 3
+# LE-NEXT:         Rows [
+# LE-NEXT:           0x10050: CFA=reg31+48: reg29=[CFA-48], reg30=[CFA-40]
+# LE-NEXT:         ]
+# LE-NEXT:       }
+# LE-NEXT:       Region {
+# LE-NEXT:         Start: 0x10058
+# LE-NEXT:         End: 0x10060
+# LE-NEXT:         Descriptor: 0x00080020000c0005 (local 7)
+# LE-NEXT:         Mode: PARTIAL SP
+# LE-NEXT:         Layout: local 6
+# LE-NEXT:         Convention: GCC
+# LE-NEXT:         Registers: x19, x29, x30
+# LE-NEXT:         Saved: x29, x30
+# LE-NEXT:         FrameRecord: Yes
+# LE-NEXT:         O: 0
+# LE-NEXT:         N: 2
+# LE-NEXT:         Rows [
+# LE-NEXT:           0x10058: CFA=reg31+32: reg29=[CFA-32], reg30=[CFA-24]
+# LE-NEXT:         ]
+# LE-NEXT:       }
+# LE-NEXT:       Region {
+# LE-NEXT:         Start: 0x10060
+# LE-NEXT:         End: 0x10070
+# LE-NEXT:         Descriptor: 0x0000000020000043 (local 2)
+# LE-NEXT:         Mode: Escape
+# LE-NEXT:         RA: B
+# LE-NEXT:         Personality: 1
+# LE-NEXT:         ProgramOffset: 0x140
+# LE-NEXT:         Program:
+# LE-NEXT:           DW_CFA_advance_loc: 4 to 0x10064
+# LE-NEXT:           DW_CFA_def_cfa_offset: +16
+# LE-NEXT:           DW_CFA_offset: reg30 -16
+# LE-NEXT:         Rows [
+# LE-NEXT:           0x10060: CFA=reg31
+# LE-NEXT:           0x10064: CFA=reg31+16: reg30=[CFA-16]
+# LE-NEXT:         ]
+# LE-NEXT:       }
+# LE-NEXT:       Region {
+# LE-NEXT:         Start: 0x10070
+# LE-NEXT:         End: 0x10080
+# LE-NEXT:         Descriptor: 0x0000000000000006 (local 3)
+# LE-NEXT:         Mode: NoInfo
+# LE-NEXT:       }
+# LE-NEXT:       Region {
+# LE-NEXT:         Start: 0x10080
+# LE-NEXT:         End: 0x10090
+# LE-NEXT:         Descriptor: 0x0000001000000068 (local 4)
+# LE-NEXT:         Mode: NULL
+# LE-NEXT:         Convention: LLVM
+# LE-NEXT:         ShadowCallStack: Yes
+# LE-NEXT:         N: 1
+# LE-NEXT:         RA: A, PC
+# LE-NEXT:         PAuthLRSite: 0x10084
+# LE-NEXT:         Rows [
+# LE-NEXT:           0x10080: CFA=reg31: reg18=DW_OP_breg18 -8, reg34=2
+# LE-NEXT:         ]
+# LE-NEXT:       }
+# LE-NEXT:       Region {
+# LE-NEXT:         Start: 0x10090
+# LE-NEXT:         End: 0x100A0
+# LE-NEXT:         Descriptor: 0x00000010e00800c2 (local 5)
+# LE-NEXT:         Mode: SP
+# LE-NEXT:         Convention: LLVM
+# LE-NEXT:         Registers: x30
+# LE-NEXT:         O: 0
+# LE-NEXT:         N: 1
+# LE-NEXT:         RA: B, PC, non-hint
+# LE-NEXT:         Personality: 7
+# LE-NEXT:         PAuthLRSite: 0x10090
+# LE-NEXT:         Rows [
+# LE-NEXT:           0x10090: CFA=reg31+16: reg30=[CFA-16], reg34=2
+# LE-NEXT:         ]
+# LE-NEXT:       }
+# LE-NEXT:     ]
+# LE-NEXT:     SideTables [
+# LE-NEXT:       SideTable {
+# LE-NEXT:         Kind: LSDA (0x1)
+# LE-NEXT:         PCWidth: 2
+# LE-NEXT:         PayloadWidth: 4
+# LE-NEXT:         Pages [
+# LE-NEXT:           Page {
+# LE-NEXT:             Address: 0x10000
+# LE-NEXT:             Rows [
+# LE-NEXT:               0x10000: 0x31000
+# LE-NEXT:               0x10060: 0x31010
+# LE-NEXT:               0x10090: none
+# LE-NEXT:             ]
+# LE-NEXT:           }
+# LE-NEXT:         ]
+# LE-NEXT:       }
+# LE-NEXT:       SideTable {
+# LE-NEXT:         Kind: Personality (0x2)
+# LE-NEXT:         PCWidth: 2
+# LE-NEXT:         PayloadWidth: 2
+# LE-NEXT:         Pages [
+# LE-NEXT:           Page {
+# LE-NEXT:             Address: 0x10090
+# LE-NEXT:             Rows [
+# LE-NEXT:               0x10090: 1
+# LE-NEXT:             ]
+# LE-NEXT:           }
+# LE-NEXT:         ]
+# LE-NEXT:       }
+# LE-NEXT:       SideTable {
+# LE-NEXT:         Kind: PAuthLRSite (0x80)
+# LE-NEXT:         PCWidth: 2
+# LE-NEXT:         PayloadWidth: 2
+# LE-NEXT:         Pages [
+# LE-NEXT:           Page {
+# LE-NEXT:             Address: 0x10090
+# LE-NEXT:             Rows [
+# LE-NEXT:               0x10090: 0x10090
+# LE-NEXT:             ]
+# LE-NEXT:           }
+# LE-NEXT:         ]
+# LE-NEXT:       }
+# LE-NEXT:     ]
+# LE-NEXT:   }
+# LE-NEXT: }
+
+--- !ELF
+FileHeader:
+  Class:   ELFCLASS64
+  Data:    ELFDATA2LSB
+  Type:    ET_DYN
+  Machine: EM_AARCH64
+Sections:
+  - Name:    .text
+    Type:    SHT_PROGBITS
+    Flags:   [ SHF_ALLOC, SHF_EXECINSTR ]
+    Address: 0x10000
+    Size:    0xa0
+  - Name:         .eh_frame_hdr
+    Type:         SHT_PROGBITS
+    Flags:        [ SHF_ALLOC ]
+    Address:      0x20000
+    AddressAlign: 8
+    ContentArray: [
+                    0x03, 0x00, 0x00, 0x00,                  ## version 3, flags 0x0
+                    0x01, 0x00, 0x00, 0x00, 0x70, 0x00, 0x00, 0x00, ## 1 pages, first level at 0x70
+                    0x02, 0x00, 0x00, 0x00, 0x60, 0x00, 0x00, 0x00, ## 2 global descriptors at 0x60
+                    0x02, 0x00, 0x00, 0x00, 0x2c, 0x00, 0x00, 0x00, ## 2 personalities at 0x2c
+                    0x03, 0x00, 0x00, 0x00, 0x38, 0x00, 0x00, 0x00, ## 3 side tables, directory at 0x38
+                    0x40, 0x01, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, ## escapes at 0x140, 6 bytes
+                    0x00, 0x00, 0x01, 0x00,                  ## personality 0: pointer at 0x30000
+                    0x08, 0x00, 0x01, 0x00,                  ## personality 1: pointer at 0x30008
+                    0x00, 0x00, 0x00, 0x00,                  ## padding
+                    0x01, 0x02, 0x04, 0x00, 0xe8, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, ## side table kind 0x1: pc width 2, payload width 4, first level at 0xe8, 1 pages
+                    0x02, 0x02, 0x02, 0x00, 0x10, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, ## side table kind 0x2: pc width 2, payload width 2, first level at 0x110, 1 pages
+                    0x80, 0x02, 0x02, 0x00, 0x28, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, ## side table kind 0x80: pc width 2, payload width 2, first level at 0x128, 1 pages
+                    0x00, 0x00, 0x00, 0x00,                  ## padding
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, ## global 0: NULL
+                    0x12, 0x03, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x00, ## global 1: SP GCC frame record x19, x20 (layout)
+                    0x00, 0x00, 0xff, 0xff, 0x80, 0x00, 0x00, 0x00, ## page 0: pc 0x10000 at 0x80
+                    0xa0, 0x00, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, ## end 0x100a0
+                    0x08, 0x00, 0x28, 0x00,                  ## page 0: 8 entries, local descriptors at +0x28
+                    0x02, 0x00, 0x00, 0x00,                  ## 0x10000: descriptor 2 (FP, pac-ret, prologue and epilogue)
+                    0x00, 0x20, 0x01, 0x00,                  ## 0x10048: descriptor 0 (NULL)
+                    0x03, 0x40, 0x01, 0x00,                  ## 0x10050: descriptor 3 (PARTIAL SP)
+                    0x09, 0x60, 0x01, 0x00,                  ## 0x10058: descriptor 9 (PARTIAL SP with a local layout)
+                    0x04, 0x80, 0x01, 0x00,                  ## 0x10060: descriptor 4 (escape)
+                    0x05, 0xc0, 0x01, 0x00,                  ## 0x10070: descriptor 5 (no unwind info)
+                    0x06, 0x00, 0x02, 0x00,                  ## 0x10080: descriptor 6 (NULL, shadow call stack, PAuth_LR)
+                    0x07, 0x40, 0x02, 0x00,                  ## 0x10090: descriptor 7 (SP, PAuth_LR site from the side table)
+                    0x00, 0x00, 0x00, 0x00,                  ## padding
+                    0x21, 0x03, 0x3c, 0x20, 0x30, 0x00, 0x03, 0x00, ## local 0: FP LLVM frame record x19, x20, d8 N=3 RA=A personality 1, prologue, epilogue
+                    0x05, 0x00, 0x0c, 0x00, 0x30, 0x00, 0x01, 0x00, ## local 1: PARTIAL SP saved x29, x30 N=3 layout 1
+                    0x43, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, ## local 2: escape, B key, personality 1, program 0
+                    0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, ## local 3: no unwind info
+                    0x68, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, ## local 4: NULL LLVM with shadow call stack, RA=A+PC, N=1
+                    0xc2, 0x00, 0x08, 0xe0, 0x10, 0x00, 0x00, 0x00, ## local 5: SP x30 N=1 RA=B+PC non-hint, personality 7
+                    0x12, 0x01, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x00, ## local 6: SP GCC frame record x19 (layout)
+                    0x05, 0x00, 0x0c, 0x00, 0x20, 0x00, 0x08, 0x00, ## local 7: PARTIAL SP saved x29, x30 N=2 layout 8
+                    0x00, 0x00, 0xff, 0xff, 0xf8, 0x00, 0x00, 0x00, ## side table 0 page 0: pc 0x10000 at 0xf8
+                    0xa0, 0x00, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, ## end 0x100a0
+                    0x03, 0x00, 0x00, 0x00,                  ## 3 rows
+                    0x00, 0x00,                              ## row 0x10000
+                    0x18, 0x00,                              ## row 0x10060
+                    0x24, 0x00,                              ## row 0x10090
+                    0x00, 0x00,                              ## padding
+                    0x00, 0x10, 0x01, 0x00,                  ## LSDA 0x31000
+                    0x10, 0x10, 0x01, 0x00,                  ## LSDA 0x31010
+                    0x00, 0x00, 0x00, 0x00,                  ## no LSDA
+                    0x90, 0x00, 0xff, 0xff, 0x20, 0x01, 0x00, 0x00, ## side table 1 page 0: pc 0x10090 at 0x120
+                    0xa0, 0x00, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, ## end 0x100a0
+                    0x01, 0x00, 0x00, 0x00,                  ## 1 rows
+                    0x00, 0x00,                              ## row 0x10090
+                    0x01, 0x00,                              ## payload 1
+                    0x90, 0x00, 0xff, 0xff, 0x38, 0x01, 0x00, 0x00, ## side table 2 page 0: pc 0x10090 at 0x138
+                    0xa0, 0x00, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, ## end 0x100a0
+                    0x01, 0x00, 0x00, 0x00,                  ## 1 rows
+                    0x00, 0x00,                              ## row 0x10090
+                    0x00, 0x00,                              ## payload 0
+                    0x05, 0x41, 0x0e, 0x10, 0x9e, 0x02       ## escape program at 0x140: advance_loc 1; def_cfa_offset 16; offset x30 2
+                  ]
+ProgramHeaders:
+  - Type:     PT_GNU_EH_FRAME
+    Flags:    [ PF_R ]
+    VAddr:    0x20000
+    FirstSec: .eh_frame_hdr
+    LastSec:  .eh_frame_hdr
+
+## A big-endian sync-only table over two pages, with the GCC CFA-anchored
+## convention, an escape with CIE augmentations, an invalid descriptor, a
+## reserved mode and a compressed LSDA page.
+# RUN: yaml2obj --docnum=2 %s -o %t.be
+# RUN: llvm-readobj --unwind %t.be | FileCheck %s --check-prefix=BE
+
+# BE:      EHFrameHeader {
+# BE-NEXT:   Address: 0x20000
+# BE-NEXT:   Offset: 0x118
+# BE-NEXT:   Size: 0xcc
+# BE-NEXT:   Corresponding Section: .eh_frame_hdr
+# BE-NEXT:   CompactUnwindTable {
+# BE-NEXT:     Version: 3
+# BE-NEXT:     Flags [ (0x1)
+# BE-NEXT:       SyncOnly (0x1)
+# BE-NEXT:     ]
+# BE-NEXT:     PageCount: 2
+# BE-NEXT:     FirstLevelOffset: 0x50
+# BE-NEXT:     GlobalDescriptorCount: 2
+# BE-NEXT:     GlobalDescriptorOffset: 0x40
+# BE-NEXT:     PersonalityCount: 1
+# BE-NEXT:     PersonalityOffset: 0x2C
+# BE-NEXT:     SideTableCount: 1
+# BE-NEXT:     SideTableDirectoryOffset: 0x30
+# BE-NEXT:     EscapeOffset: 0xC4
+# BE-NEXT:     EscapeSize: 0x8
+# BE-NEXT:     Personalities [
+# BE-NEXT:       0: 0x30000
+# BE-NEXT:     ]
+# BE-NEXT:     GlobalDescriptors [
+# BE-NEXT:       0: 0x0000000000000000
+# BE-NEXT:       1: 0x00000190001c071a
+# BE-NEXT:     ]
+# BE-NEXT:     Regions [
+# BE-NEXT:       Region {
+# BE-NEXT:         Start: 0x10000
+# BE-NEXT:         End: 0x10010
+# BE-NEXT:         Descriptor: 0x00000190001c071a (global 1)
+# BE-NEXT:         Mode: SP
+# BE-NEXT:         Convention: GCC CFA-anchored
+# BE-NEXT:         Registers: x19, x20, x21, x29, x30
+# BE-NEXT:         FrameRecord: Yes
+# BE-NEXT:         O: 0
+# BE-NEXT:         N: 25
+# BE-NEXT:         Rows [
+# BE-NEXT:           0x10000: CFA=reg31+400: reg19=[CFA-32], reg20=[CFA-24], reg21=[CFA-16], reg29=[CFA-48], reg30=[CFA-40]
+# BE-NEXT:         ]
+# BE-NEXT:       }
+# BE-NEXT:       Region {
+# BE-NEXT:         Start: 0x10010
+# BE-NEXT:         End: 0x20000
+# BE-NEXT:         Descriptor: 0x0000000020000703 (local 0)
+# BE-NEXT:         Mode: Escape
+# BE-NEXT:         Augmentation: SGN
+# BE-NEXT:         Personality: 1
+# BE-NEXT:         ProgramOffset: 0xC4
+# BE-NEXT:         Program:
+# BE-NEXT:           DW_CFA_advance_loc2: 1024 to 0x10410
+# BE-NEXT:           DW_CFA_def_cfa_expression: DW_OP_breg31 +16
+# BE-NEXT:         Rows [
+# BE-NEXT:           0x10010: CFA=reg31
+# BE-NEXT:           0x10410: CFA=DW_OP_breg31 +16
+# BE-NEXT:         ]
+# BE-NEXT:       }
+# BE-NEXT:       Region {
+# BE-NEXT:         Start: 0x20000
+# BE-NEXT:         End: 0x20010
+# BE-NEXT:         Descriptor: 0x0000000000000101 (local 0)
+# BE-NEXT:         Mode: FP
+# BE-NEXT:         Error: invalid descriptor
+# BE-NEXT:       }
+# BE-NEXT:       Region {
+# BE-NEXT:         Start: 0x20010
+# BE-NEXT:         End: 0x20020
+# BE-NEXT:         Descriptor: 0x0000000000000007 (local 1)
+# BE-NEXT:         Mode: Reserved
+# BE-NEXT:       }
+# BE-NEXT:       Region {
+# BE-NEXT:         Start: 0x20020
+# BE-NEXT:         End: 0x20030
+# BE-NEXT:         Descriptor: 0x0000000000000000 (global 0)
+# BE-NEXT:         Mode: NULL
+# BE-NEXT:         Convention: LLVM
+# BE-NEXT:         N: 0
+# BE-NEXT:         Rows [
+# BE-NEXT:           0x20020: CFA=reg31
+# BE-NEXT:         ]
+# BE-NEXT:       }
+# BE-NEXT:     ]
+# BE-NEXT:     SideTables [
+# BE-NEXT:       SideTable {
+# BE-NEXT:         Kind: LSDA (0x1)
+# BE-NEXT:         PCWidth: 2
+# BE-NEXT:         PayloadWidth: 4
+# BE-NEXT:         Pages [
+# BE-NEXT:           Page {
+# BE-NEXT:             Address: 0x10010
+# BE-NEXT:             BaseLSDA: 0x31000
+# BE-NEXT:             Rows [
+# BE-NEXT:               0x10010: 0x31000
+# BE-NEXT:               0x10020: none
+# BE-NEXT:               0x10030: 0x31040
+# BE-NEXT:             ]
+# BE-NEXT:           }
+# BE-NEXT:         ]
+# BE-NEXT:       }
+# BE-NEXT:     ]
+# BE-NEXT:   }
+# BE-NEXT: }
+
+--- !ELF
+FileHeader:
+  Class:   ELFCLASS64
+  Data:    ELFDATA2MSB
+  Type:    ET_DYN
+  Machine: EM_AARCH64
+Sections:
+  - Name:    .text
+    Type:    SHT_PROGBITS
+    Flags:   [ SHF_ALLOC, SHF_EXECINSTR ]
+    Address: 0x10000
+    Size:    0xa0
+  - Name:         .eh_frame_hdr
+    Type:         SHT_PROGBITS
+    Flags:        [ SHF_ALLOC ]
+    Address:      0x20000
+    AddressAlign: 8
+    ContentArray: [
+                    0x03, 0x01, 0x00, 0x00,                  ## version 3, flags 0x1
+                    0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x50, ## 2 pages, first level at 0x50
+                    0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x40, ## 2 global descriptors at 0x40
+                    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x2c, ## 1 personalities at 0x2c
+                    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x30, ## 1 side tables, directory at 0x30
+                    0x00, 0x00, 0x00, 0xc4, 0x00, 0x00, 0x00, 0x08, ## escapes at 0xc4, 8 bytes
+                    0x00, 0x01, 0x00, 0x00,                  ## personality 0: pointer at 0x30000
+                    0x01, 0x02, 0x04, 0x00, 0x00, 0x00, 0x00, 0xa0, 0x00, 0x00, 0x00, 0x01, ## side table kind 0x1: pc width 2, payload width 4, first level at 0xa0, 1 pages
+                    0x00, 0x00, 0x00, 0x00,                  ## padding
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, ## global 0: NULL
+                    0x00, 0x00, 0x01, 0x90, 0x00, 0x1c, 0x07, 0x1a, ## global 1: SP GCC CFA-anchored frame record x19-x21 N=25
+                    0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x68, ## page 0: pc 0x10000 at 0x68
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, ## page 1: pc 0x20000 at 0x80
+                    0x00, 0x00, 0x00, 0x30, 0x00, 0x00, 0x00, 0x00, ## end 0x20030
+                    0x00, 0x02, 0x00, 0x10,                  ## page 0: 2 entries, local descriptors at +0x10
+                    0x00, 0x00, 0x00, 0x01,                  ## 0x10000: descriptor 1 (SP GCC CFA-anchored)
+                    0x00, 0x00, 0x40, 0x02,                  ## 0x10010: descriptor 2 (escape)
+                    0x00, 0x00, 0x00, 0x00,                  ## padding
+                    0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x07, 0x03, ## local 0: escape, augmentations S, G and N, personality 1
+                    0x00, 0x03, 0x00, 0x10,                  ## page 1: 3 entries, local descriptors at +0x10
+                    0x00, 0x00, 0x00, 0x02,                  ## 0x20000: descriptor 2 (invalid)
+                    0x00, 0x00, 0x40, 0x03,                  ## 0x20010: descriptor 3 (reserved mode)
+                    0x00, 0x00, 0x80, 0x00,                  ## 0x20020: descriptor 0 (NULL)
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, ## local 0: FP x19 without a frame record (invalid)
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, ## local 1: reserved mode 7
+                    0xff, 0xff, 0x00, 0x10, 0x00, 0x00, 0x00, 0xb0, ## side table 0 page 0: pc 0x10010 at 0xb0
+                    0x00, 0x00, 0x00, 0x30, 0x00, 0x00, 0x00, 0x00, ## end 0x20030
+                    0x00, 0x03, 0x00, 0x01,                  ## 3 rows, compressed
+                    0x00, 0x01, 0x10, 0x00,                  ## base LSDA 0x31000
+                    0x00, 0x00,                              ## row 0x10010
+                    0x00, 0x04,                              ## row 0x10020
+                    0x00, 0x08,                              ## row 0x10030
+                    0x00, 0x00,                              ## LSDA 0x31000
+                    0xff, 0xff,                              ## LSDA none
+                    0x00, 0x10,                              ## LSDA 0x31040
+                    0x07, 0x03, 0x01, 0x00, 0x0f, 0x02, 0x8f, 0x10  ## escape program at 0xc4: advance_loc2 0x100; def_cfa_expression breg31 16
+                  ]
+ProgramHeaders:
+  - Type:     PT_GNU_EH_FRAME
+    Flags:    [ PF_R ]
+    VAddr:    0x20000
+    FirstSec: .eh_frame_hdr
+    LastSec:  .eh_frame_hdr

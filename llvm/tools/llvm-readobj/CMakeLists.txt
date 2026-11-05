@@ -17,6 +17,7 @@ add_llvm_tool(llvm-readobj
   ARMWinEHPrinter.cpp
   COFFDumper.cpp
   COFFImportDumper.cpp
+  ELFCompactUnwindPrinter.cpp
   ELFDumper.cpp
   llvm-readobj.cpp
   MachODumper.cpp
