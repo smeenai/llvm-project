@@ -52,6 +52,10 @@ constexpr unsigned kSP = 31, kFP = 29;
 // d8-d15 are 12-19.
 using a64::FrameRecordCSRs;
 using a64::NumCSRs;
+// A region is its body, one CFI state, plus at most one state per instruction
+// of its prologue, epilogue window and tail.
+constexpr size_t kMaxRegionStates =
+    1 + a64::MaxPS + a64::MaxEpiLen + a64::MaxTailLen;
 
 int csrIndex(uint64_t reg) {
   if (reg >= 19 && reg <= 30)
@@ -604,7 +608,8 @@ using Regions = SmallVector<std::pair<unsigned, RegionDesc>, 2>;
 // frameless region. Otherwise the run goes to the next region's lead-in.
 //
 // An episode that doesn't fit one region (GCC records each prologue save, so
-// every intermediate state needs its own region) gets a region per state.
+// every intermediate state needs its own region) is split greedily: each region
+// extends to the furthest state change at which it still fits.
 bool encodeAsync(Fn &fn, Regions &out) {
   size_t S = fn.states.size();
   fn.ids.resize(S);
@@ -687,11 +692,18 @@ bool encodeAsync(Fn &fn, Regions &out) {
       if (s > lo && s < hi)
         pts.push_back(s);
     pts.push_back(hi);
-    for (size_t p = 0; p + 1 < pts.size(); ++p) {
-      std::optional<Desc> d = tryRegion(fn, pts[p], pts[p + 1]);
-      if (!d)
+    for (size_t p = 0; p + 1 < pts.size();) {
+      std::optional<Desc> best;
+      size_t q = 0;
+      for (size_t r = p + 1; r < pts.size() && r - p <= kMaxRegionStates; ++r)
+        if (std::optional<Desc> d = tryRegion(fn, pts[p], pts[r])) {
+          best = d;
+          q = r;
+        }
+      if (!best)
         return false;
-      out.push_back({pts[p], *d});
+      out.push_back({pts[p], *best});
+      p = q;
     }
   }
   return true;
