@@ -116,6 +116,11 @@ uint64_t regBits(uint32_t r, bool frameRecord) {
          uint64_t(r >> 12 & 0xff) << a64::DRegsShift;
 }
 
+uint64_t withN(uint64_t bits, unsigned N) {
+  return (bits & ~(uint64_t(0xfff) << a64::NShift)) | uint64_t(N)
+                                                          << a64::NShift;
+}
+
 struct Fn {
   unsigned n = 0;
   // The CIE's B key and non-hint PAuth instruction augmentations, which pick
@@ -123,6 +128,8 @@ struct Fn {
   bool bKey = false, nonHint = false;
   SmallVector<unsigned, 8> starts;
   SmallVector<State, 8> states;
+  // states[k] equals states[j] iff ids[k] == ids[j] (filled by encodeAsync).
+  SmallVector<uint32_t, 8> ids;
   SmallVector<unsigned, 0> calls;
   // bodyCandidates' results, shared with the functions encoded alongside.
   StringMap<SmallVector<Desc, 4>> *candidates = nullptr;
@@ -394,20 +401,298 @@ const SmallVector<Desc, 4> &bodyCandidates(Fn &fn, const State &st) {
   return out;
 }
 
+// A run of one CFI state within a region, in instructions from its start.
+struct Seg {
+  unsigned s, e;
+  const State *st;
+  uint32_t id;
+};
+
+// The prologue, epilogue window and tail lengths of an n-instruction region
+// whose body is segs[f..l], and the sp-relative CFA offset the windows share,
+// if any.
+struct Windows {
+  unsigned PS = 0, EpiLen = 0, TailLen = 0;
+  std::optional<int32_t> spOff;
+};
+
+std::optional<Windows> deriveWindows(ArrayRef<Seg> segs, size_t f, size_t l,
+                                     unsigned n) {
+  Windows w;
+  w.PS = segs[f].s;
+  if (l + 1 < segs.size()) {
+    // The tail starts where the CFA returns to SP for good. Registers may
+    // still be described in their slots there (the shadow call stack pop);
+    // the check against the decoded states decides. The epilogue window lies
+    // between the body and the tail.
+    size_t t = SIZE_MAX;
+    for (size_t k = l + 1; k < segs.size(); ++k) {
+      bool allNull = true;
+      for (size_t j = k; j < segs.size(); ++j)
+        allNull &= !segs[j].st->CFAIsFP && segs[j].st->CFAOffset == 0;
+      if (allNull) {
+        t = k;
+        break;
+      }
+    }
+    if (t == SIZE_MAX)
+      return std::nullopt;
+    w.TailLen = n - segs[t].s;
+    w.EpiLen = segs[t].s - segs[l].e;
+    if (w.TailLen > a64::MaxTailLen || w.EpiLen > a64::MaxEpiLen)
+      return std::nullopt;
+  }
+  if (w.PS > 63)
+    return std::nullopt;
+  // SP-based CFA offsets outside the body must agree.
+  for (size_t k = 0; k < segs.size(); ++k) {
+    if (k >= f && k <= l)
+      continue;
+    const State &st = *segs[k].st;
+    if (!st.CFAIsFP && st.CFAOffset) {
+      if (w.spOff && *w.spOff != st.CFAOffset)
+        return std::nullopt;
+      w.spOff = st.CFAOffset;
+    }
+  }
+  return w;
+}
+
+std::optional<Desc> tryRegion(Fn &fn, unsigned a, unsigned b) {
+  SmallVector<Seg, 8> segs;
+  size_t lo = llvm::upper_bound(fn.starts, a) - fn.starts.begin() - 1;
+  size_t hi = llvm::lower_bound(fn.starts, b) - fn.starts.begin();
+  for (size_t k = lo; k < hi; ++k) {
+    unsigned s0 = std::max(fn.starts[k], a);
+    unsigned e0 =
+        std::min(k + 1 < fn.starts.size() ? fn.starts[k + 1] : fn.n, b);
+    if (e0 > s0)
+      segs.push_back({s0 - a, e0 - a, &fn.states[k], fn.ids[k]});
+  }
+  unsigned n = b - a;
+  // The body is the frame-pointer state if there is one (prologue and
+  // epilogue windows are sp-based), else the framed state saving the most
+  // registers.
+  const Seg *body = &segs[0];
+  for (const Seg &sg : segs) {
+    auto rank = [](const State &st) {
+      return std::make_tuple(st.CFAIsFP, !st.isFrameless(),
+                             llvm::popcount(st.Saved));
+    };
+    if (rank(*sg.st) > rank(*body->st))
+      body = &sg;
+  }
+  size_t f = SIZE_MAX, l = 0;
+  for (size_t k = 0; k < segs.size(); ++k)
+    if (segs[k].id == body->id) {
+      f = std::min(f, k);
+      l = k;
+    }
+  for (size_t k = f; k <= l; ++k)
+    if (segs[k].id != body->id)
+      return std::nullopt;
+  std::optional<Windows> w = deriveWindows(segs, f, l, n);
+  if (!w)
+    return std::nullopt;
+  unsigned PS = w->PS, EpiLen = w->EpiLen, TailLen = w->TailLen;
+  std::optional<int32_t> nsp = w->spOff;
+  for (const Desc &c : bodyCandidates(fn, *body->st)) {
+    if ((PS || TailLen) && c.shape.Mode == a64::ModeNull)
+      continue;
+    if (c.shape.Mode == a64::ModeSP && nsp && *nsp != 16 * int(c.shape.N))
+      continue;
+    Desc d = c;
+    if (c.shape.FP && c.shape.Conv == a64::ConvGCC) {
+      if (nsp && *nsp != 16 * int(c.shape.N))
+        continue;
+    } else if (c.shape.FP) {
+      int nfp = nsp ? *nsp / 16 : 0;
+      if (nfp < 0 || nfp > int(a64::MaxN))
+        continue;
+      d.bits = withN(d.bits, (PS || EpiLen) ? nfp : 0);
+    }
+    d.bits |= uint64_t(PS != 0) << a64::HasPrologueShift |
+              uint64_t(TailLen != 0) << a64::HasEpilogueShift;
+    // The slots, akind and EpiLen follow from the frame shape alone.
+    a64::Shape &s = d.shape;
+    if (!a64::decodeShape(d.bits, 0, s) || (TailLen && EpiLen != s.EpiLen))
+      continue;
+    // The tail is signed to its end only if the CFI says so at the last
+    // instruction, which matters only when the tail outlasts its signed
+    // prefix.
+    unsigned signedLen = (s.SCS ? 1 : 0) + (s.WithPC ? 4 : 1);
+    if (TailLen && s.RA && signedLen < TailLen && fn.at(a + n - 1).RASigned)
+      d.bits |= uint64_t(1) << a64::TailSignedShift;
+    // The lead-in ends where the return address becomes signed, or just
+    // before the shadow call stack push; failing both, it is the frameless
+    // start of the window less the allocating store. A frame-pointer window of
+    // N = 0 keeps the CFA at sp, so it looks frameless too and the lead-in is
+    // empty.
+    if (PS) {
+      unsigned p = 0;
+      if (s.RA || s.SCS) {
+        while (p < PS && !(s.RA ? fn.at(a + p).RASigned : fn.at(a + p).X18))
+          ++p;
+        if (!s.RA && p)
+          --p;
+      } else if (!(s.FP && s.N == 0)) {
+        while (p < PS && fn.at(a + p).isFrameless())
+          ++p;
+        p = p ? p - 1 : 0;
+      }
+      if (p >= PS || p > 2)
+        continue;
+      if (p != s.CanonApos)
+        d.bits |= uint64_t(p + 1) << a64::AposShift;
+    }
+    // Store the prologue and tail lengths that differ from the canonical
+    // ones.
+    a64::computeLengths(d.bits, s);
+    if (PS && PS != s.CanonPS) {
+      if (PS > a64::MaxPS)
+        continue;
+      d.bits |= uint64_t(PS) << a64::PSShift;
+    }
+    if (TailLen && TailLen != s.CanonTailLen) {
+      if (TailLen > a64::MaxTailLen)
+        continue;
+      d.bits |= uint64_t(TailLen) << a64::TailLenShift;
+    }
+    a64::computeLengths(d.bits, s);
+    // Both the CFI and the decoded rules only change at these points, so
+    // checking them checks every instruction.
+    SmallVector<unsigned, 16> pts = a64::frameChanges(s, n);
+    for (const Seg &sg : segs)
+      pts.push_back(sg.s);
+    bool ok = true;
+    for (unsigned pt : pts)
+      if (toState(s, a64::frameAt(s, n, pt)) != fn.at(a + pt)) {
+        ok = false;
+        break;
+      }
+    if (!ok)
+      continue;
+    return d;
+  }
+  return std::nullopt;
+}
+
 // What the table needs of a region's descriptor.
 struct RegionDesc {
   uint64_t bits;
-  RegionDesc(const Desc &d) : bits(d.bits) {}
+  uint8_t ps, tailLen;
+  RegionDesc(const Desc &d)
+      : bits(d.bits), ps(d.shape.PS), tailLen(d.shape.TailLen) {}
 };
 using Regions = SmallVector<std::pair<unsigned, RegionDesc>, 2>;
 
-// One region per CFI state.
-bool encodeStates(Fn &fn, Regions &out) {
-  for (size_t k = 0; k < fn.states.size(); ++k) {
-    const SmallVector<Desc, 4> &cands = bodyCandidates(fn, fn.states[k]);
-    if (cands.empty())
-      return false;
-    out.push_back({fn.starts[k], cands[0]});
+// One region per frame episode (a run of framed states between frameless
+// ones), where possible.
+//
+// An episode's region starts with its prologue's lead-in: the frameless run
+// before the frame when it fits (up to three instructions, two before the
+// signed state and then the allocating store, plus the shadow call stack push;
+// or the whole run, as a prologue window of N = 0, for a frame-pointer body
+// with no sp-based frame), else the canonical lead-in after a frameless region.
+// A frame that was already seen (code after an early return) is re-entered
+// with no prologue.
+//
+// The previous region can only end in a tail if its frame was last sp-based
+// (an SP body or an epilogue window). The tail then takes the
+// frameless run up to the next region's canonical lead-in if that fits, else
+// just the signed part of the run and the return, leaving the rest to a
+// frameless region. Otherwise the run goes to the next region's lead-in.
+//
+// An episode that doesn't fit one region (GCC records each prologue save, so
+// every intermediate state needs its own region) gets a region per state.
+bool encodeAsync(Fn &fn, Regions &out) {
+  size_t S = fn.states.size();
+  fn.ids.resize(S);
+  for (size_t k = 0; k < S; ++k) {
+    size_t j = 0;
+    while (fn.states[j] != fn.states[k])
+      ++j;
+    fn.ids[k] = j;
+  }
+  auto segEnd = [&](size_t k) { return k + 1 < S ? fn.starts[k + 1] : fn.n; };
+
+  SmallVector<unsigned, 8> bounds = {0};
+  auto bound = [&](unsigned b) {
+    if (b > bounds.back() && b < fn.n)
+      bounds.push_back(b);
+  };
+  SmallVector<uint32_t, 4> seen;
+  bool havePrev = false;
+  unsigned prevEnd = 0;
+  size_t prevEndSeg = 0;
+  for (size_t k = 0; k < S;) {
+    if (fn.states[k].isFrameless()) {
+      ++k;
+      continue;
+    }
+    size_t kb = k;
+    while (k < S && !fn.states[k].isFrameless())
+      ++k;
+    unsigned F = fn.starts[kb];
+    const State &st = fn.states[kb];
+    unsigned scs = st.X18 ? 1 : 0;
+    unsigned canonLead = llvm::is_contained(seen, fn.ids[kb])
+                             ? 0
+                             : 1 + scs + (st.RASigned ? (st.raPc ? 2 : 1) : 0);
+    unsigned P;
+    const State *last = havePrev ? &fn.states[prevEndSeg - 1] : nullptr;
+    if (last && !last->CFAIsFP && !bodyCandidates(fn, *last).empty()) {
+      unsigned minTail = prevEnd;
+      for (size_t j = prevEndSeg; j < kb && fn.states[j].RASigned; ++j)
+        minTail = segEnd(j);
+      minTail = std::min(minTail + 1, F);
+      P = std::max(F >= canonLead ? F - canonLead : 0, minTail);
+      if (P - prevEnd > a64::MaxTailLen)
+        bound(minTail);
+    } else {
+      unsigned maxLead = 3 + scs;
+      bool spFrame = false;
+      for (size_t i = kb; i < k; ++i)
+        spFrame |= !fn.states[i].CFAIsFP && fn.states[i].CFAOffset != 0;
+      if (st.CFAIsFP && !spFrame)
+        maxLead = a64::MaxPS;
+      size_t j = kb;
+      while (j > 0 && fn.states[j - 1].isFrameless())
+        --j;
+      unsigned runStart = std::max(fn.starts[j], prevEnd);
+      P = F - runStart <= maxLead
+              ? runStart
+              : std::max(F >= canonLead ? F - canonLead : 0, runStart);
+      if (havePrev)
+        bound(prevEnd);
+    }
+    bound(P);
+    for (size_t j = kb; j < k; ++j)
+      if (!llvm::is_contained(seen, fn.ids[j]))
+        seen.push_back(fn.ids[j]);
+    havePrev = true;
+    prevEnd = segEnd(k - 1);
+    prevEndSeg = k;
+  }
+  bounds.push_back(fn.n);
+
+  for (size_t i = 0; i + 1 < bounds.size(); ++i) {
+    unsigned lo = bounds[i], hi = bounds[i + 1];
+    if (std::optional<Desc> d = tryRegion(fn, lo, hi)) {
+      out.push_back({lo, *d});
+      continue;
+    }
+    SmallVector<unsigned, 16> pts = {lo};
+    for (unsigned s : fn.starts)
+      if (s > lo && s < hi)
+        pts.push_back(s);
+    pts.push_back(hi);
+    for (size_t p = 0; p + 1 < pts.size(); ++p) {
+      std::optional<Desc> d = tryRegion(fn, pts[p], pts[p + 1]);
+      if (!d)
+        return false;
+      out.push_back({pts[p], *d});
+    }
   }
   return true;
 }
@@ -593,6 +878,7 @@ struct CompactUnwindTable::Impl {
   struct LDesc {
     uint64_t bits;
     bool foldable;
+    bool hasEpi;
   };
   SmallVector<LDesc, 0> ldescs;
   DenseMap<uint64_t, uint32_t> ldescIds;
@@ -668,10 +954,10 @@ struct CompactUnwindTable::Impl {
 
   Impl(Ctx &ctx) : ctx(ctx), kind(ctx.arg.zCompactUnwind) {}
 
-  uint32_t getLDesc(uint64_t bits, bool foldable) {
+  uint32_t getLDesc(uint64_t bits, bool foldable, bool hasEpi) {
     auto [it, inserted] = ldescIds.try_emplace(bits, ldescs.size());
     if (inserted)
-      ldescs.push_back({bits, foldable});
+      ldescs.push_back({bits, foldable, hasEpi});
     return it->second;
   }
 
@@ -806,7 +1092,7 @@ void CompactUnwindTable::Impl::encode() {
         }
         ok = encodeSync(fn, frameOnce, out.regions);
       } else {
-        ok = encodeStates(fn, out.regions);
+        ok = encodeAsync(fn, out.regions);
       }
       if (!ok)
         interp.why = "region_constraints";
@@ -881,17 +1167,20 @@ void CompactUnwindTable::Impl::encode() {
                       uint64_t(cie.mte) << a64::EscMTEShift |
                       uint64_t(cie.nonHintPAuth) << a64::EscNonHintShift |
                       persBits | uint64_t(it->second) << a64::EscOffsetShift;
-      f.regions.push_back({0, getLDesc(bits, false)});
+      f.regions.push_back({0, getLDesc(bits, false, false)});
       funcs.push_back(std::move(f));
       continue;
     }
     for (auto &[off, d] : e.regions) {
       uint64_t bits = d.bits | persBits;
-      f.regions.push_back({off * 4, getLDesc(bits, true)});
+      // Windows are relative to the region start, which folding would move, so
+      // descriptors with windows don't fold.
+      bool pe = d.ps || d.tailLen;
+      f.regions.push_back({off * 4, getLDesc(bits, !pe, d.tailLen != 0)});
     }
     funcs.push_back(std::move(f));
   }
-  noInfo = getLDesc(a64::ModeNoInfo, true);
+  noInfo = getLDesc(a64::ModeNoInfo, true, false);
 }
 
 size_t CompactUnwindTable::Impl::layout(uint64_t hdrVA) {
@@ -975,7 +1264,7 @@ size_t CompactUnwindTable::Impl::layout(uint64_t hdrVA) {
   lsdaTable.rows.clear();
   persTable.rows.clear();
   uint64_t prevEnd = 0;
-  bool havePrev = false, prevFoldable = false;
+  bool havePrev = false, prevEpi = false, prevFoldable = false;
   uint32_t prevDesc = 0;
   auto push = [&](uint64_t va, uint32_t id) {
     const LDesc &l = ldescs[id];
@@ -995,7 +1284,9 @@ size_t CompactUnwindTable::Impl::layout(uint64_t hdrVA) {
       // first.
       continue;
     }
-    if (havePrev && va > prevEnd && !isPadding(prevEnd, va))
+    // A region with an epilogue can't extend over padding, since its epilogue
+    // is anchored at the region's end.
+    if (havePrev && va > prevEnd && (prevEpi || !isPadding(prevEnd, va)))
       push(prevEnd, noInfo);
     for (auto [off, id] : f.regions)
       push(va + off, id);
@@ -1003,6 +1294,7 @@ size_t CompactUnwindTable::Impl::layout(uint64_t hdrVA) {
       lsdaTable.rows.push_back({va, i});
     if (f.pers >= 7)
       persTable.rows.push_back({va, i});
+    prevEpi = ldescs[f.regions.back().second].hasEpi;
     prevEnd = va + f.size;
     havePrev = true;
   }

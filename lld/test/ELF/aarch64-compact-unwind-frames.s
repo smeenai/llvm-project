@@ -10,82 +10,42 @@
 // RUN: llvm-readobj --unwind %t.sync | FileCheck %s --check-prefix=SYNC
 
 // ASYNC:      Start: 0x210000
-// ASYNC-NEXT: End: 0x210004
-// ASYNC:      Mode: NULL
-// ASYNC-NEXT: Convention: LLVM
-// ASYNC-NEXT: N: 0
-// ASYNC:      0x210000: CFA=reg31
-// ASYNC:      Start: 0x210004
-// ASYNC-NEXT: End: 0x210008
-// ASYNC:      Mode: NULL
-// ASYNC-NEXT: Convention: LLVM
-// ASYNC-NEXT: N: 0
-// ASYNC-NEXT: RA: A
-// ASYNC:      0x210004: CFA=reg31: reg34=1
-// ASYNC:      Start: 0x210008
-// ASYNC-NEXT: End: 0x210014
-// ASYNC:      Mode: SP
-// ASYNC-NEXT: Convention: LLVM
-// ASYNC-NEXT: Registers:
-// ASYNC-NEXT: O: 0
-// ASYNC-NEXT: N: 3
-// ASYNC-NEXT: RA: A
-// ASYNC:      0x210008: CFA=reg31+48: reg34=1
-// ASYNC:      Start: 0x210014
-// ASYNC-NEXT: End: 0x210018
+// ASYNC-NEXT: End: 0x21002C
 // ASYNC:      Mode: FP
 // ASYNC-NEXT: Convention: LLVM
 // ASYNC-NEXT: Registers: x19, x20, x29, x30, d8
 // ASYNC-NEXT: FrameRecord: Yes
 // ASYNC-NEXT: O: 0
-// ASYNC-NEXT: N: 0
-// ASYNC-NEXT: RA: A
-// ASYNC:      0x210014: CFA=reg29+32: reg19=[CFA-8], reg20=[CFA-16], reg29=[CFA-32], reg30=[CFA-24], reg34=1, reg72=[CFA-48]
-// ASYNC:      Start: 0x210018
-// ASYNC-NEXT: End: 0x210024
-// ASYNC:      Mode: SP
-// ASYNC-NEXT: Convention: LLVM
-// ASYNC-NEXT: Registers: x19, x20, x29, x30, d8
-// ASYNC-NEXT: FrameRecord: Yes
-// ASYNC-NEXT: O: 0
 // ASYNC-NEXT: N: 3
 // ASYNC-NEXT: RA: A
-// ASYNC:      0x210018: CFA=reg31+48: reg19=[CFA-8], reg20=[CFA-16], reg29=[CFA-32], reg30=[CFA-24], reg34=1, reg72=[CFA-48]
-// ASYNC:      Start: 0x210024
-// ASYNC-NEXT: End: 0x210028
-// ASYNC:      Mode: NULL
-// ASYNC-NEXT: Convention: LLVM
-// ASYNC-NEXT: N: 0
-// ASYNC-NEXT: RA: A
-// ASYNC:      0x210024: CFA=reg31: reg34=1
-// ASYNC:      Start: 0x210028
-// ASYNC-NEXT: End: 0x210030
-// ASYNC:      Mode: NULL
-// ASYNC-NEXT: Convention: LLVM
-// ASYNC-NEXT: N: 0
-// ASYNC:      0x210028: CFA=reg31
-// ASYNC:      Start: 0x210030
-// ASYNC-NEXT: End: 0x210034
-// ASYNC:      Mode: SP
-// ASYNC-NEXT: Convention: LLVM
-// ASYNC-NEXT: Registers:
-// ASYNC-NEXT: O: 0
-// ASYNC-NEXT: N: 2
-// ASYNC:      0x210030: CFA=reg31+32
-// ASYNC:      Start: 0x210034
-// ASYNC-NEXT: End: 0x210040
+// ASYNC-NEXT: Prologue: apos=1 PS=5
+// ASYNC-NEXT: Epilogue: window=3 tail=2
+// ASYNC:      0x210000: CFA=reg31
+// ASYNC-NEXT: 0x210004: CFA=reg31: reg34=1
+// ASYNC-NEXT: 0x210008: CFA=reg31+48: reg34=1
+// ASYNC-NEXT: 0x210014: CFA=reg29+32: reg19=[CFA-8], reg20=[CFA-16], reg29=[CFA-32], reg30=[CFA-24], reg34=1, reg72=[CFA-48]
+// ASYNC-NEXT: 0x210018: CFA=reg31+48: reg19=[CFA-8], reg20=[CFA-16], reg29=[CFA-32], reg30=[CFA-24], reg34=1, reg72=[CFA-48]
+// ASYNC-NEXT: 0x210024: CFA=reg31: reg34=1
+// ASYNC-NEXT: 0x210028: CFA=reg31
+// ASYNC:      Start: 0x21002C
+// ASYNC-NEXT: End: 0x210044
 // ASYNC:      Mode: SP
 // ASYNC-NEXT: Convention: LLVM
 // ASYNC-NEXT: Registers: x19, x30, d8
 // ASYNC-NEXT: O: 0
 // ASYNC-NEXT: N: 2
-// ASYNC:      0x210034: CFA=reg31+32: reg19=[CFA-8], reg30=[CFA-16], reg72=[CFA-32]
-// ASYNC:      Start: 0x210040
+// ASYNC-NEXT: Prologue: apos=0 PS=2
+// ASYNC-NEXT: Epilogue: window=0 tail=1
+// ASYNC:      0x21002c: CFA=reg31
+// ASYNC-NEXT: 0x210030: CFA=reg31+32
+// ASYNC-NEXT: 0x210034: CFA=reg31+32: reg19=[CFA-8], reg30=[CFA-16], reg72=[CFA-32]
+// ASYNC-NEXT: 0x210040: CFA=reg31
+// ASYNC:      Start: 0x210044
 // ASYNC-NEXT: End: 0x210048
 // ASYNC:      Mode: NULL
 // ASYNC-NEXT: Convention: LLVM
 // ASYNC-NEXT: N: 0
-// ASYNC:      0x210040: CFA=reg31
+// ASYNC:      0x210044: CFA=reg31
 // ASYNC:      Start: 0x210048
 // ASYNC-NEXT: End: 0x21004C
 // ASYNC:      Mode: NULL
@@ -130,34 +90,25 @@
 // ASYNC-NEXT: N: 0
 // ASYNC:      0x210058: CFA=reg31: reg18=DW_OP_breg18 -8
 // ASYNC:      Start: 0x21005C
-// ASYNC-NEXT: End: 0x210064
+// ASYNC-NEXT: End: 0x210060
 // ASYNC:      Mode: NULL
 // ASYNC-NEXT: Convention: LLVM
 // ASYNC-NEXT: N: 0
 // ASYNC:      0x21005c: CFA=reg31
-// ASYNC:      Start: 0x210064
-// ASYNC-NEXT: End: 0x210068
-// ASYNC:      Mode: SP
-// ASYNC-NEXT: Convention: LLVM
-// ASYNC-NEXT: Registers:
-// ASYNC-NEXT: O: 0
-// ASYNC-NEXT: N: 5
-// ASYNC:      0x210064: CFA=reg31+80
-// ASYNC:      Start: 0x210068
-// ASYNC-NEXT: End: 0x210078
+// ASYNC:      Start: 0x210060
+// ASYNC-NEXT: End: 0x21007C
 // ASYNC:      Mode: SP
 // ASYNC-NEXT: Convention: GCC
 // ASYNC-NEXT: Registers: x29, x30
 // ASYNC-NEXT: FrameRecord: Yes
 // ASYNC-NEXT: O: 1
 // ASYNC-NEXT: N: 5
-// ASYNC:      0x210068: CFA=reg31+80: reg29=[CFA-64], reg30=[CFA-56]
-// ASYNC:      Start: 0x210078
-// ASYNC-NEXT: End: 0x21007C
-// ASYNC:      Mode: NULL
-// ASYNC-NEXT: Convention: LLVM
-// ASYNC-NEXT: N: 0
-// ASYNC:      0x210078: CFA=reg31
+// ASYNC-NEXT: Prologue: apos=0 PS=2
+// ASYNC-NEXT: Epilogue: window=0 tail=1
+// ASYNC:      0x210060: CFA=reg31
+// ASYNC-NEXT: 0x210064: CFA=reg31+80
+// ASYNC-NEXT: 0x210068: CFA=reg31+80: reg29=[CFA-64], reg30=[CFA-56]
+// ASYNC-NEXT: 0x210078: CFA=reg31
 // ASYNC:      Start: 0x21007C
 // ASYNC-NEXT: End: 0x2100A8
 // ASYNC:      Mode: Escape
