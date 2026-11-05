@@ -8,8 +8,11 @@
 
 #include "llvm/DebugInfo/DWARF/LowLevel/DWARFCFIProgram.h"
 #include "llvm/Support/Compiler.h"
+#include "llvm/Support/EndianStream.h"
 #include "llvm/Support/Errc.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/LEB128.h"
+#include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cassert>
 #include <cinttypes>
@@ -215,4 +218,250 @@ CFIProgram::getOperandTypes() {
   }();
 
   return ArrayRef<OperandType[MaxOperands]>(&OpTypes[0], DW_CFA_restore + 1);
+}
+
+namespace {
+/// Writes the instructions of a CFIProgram for a CIE with other alignment
+/// factors (see CFIProgram::encode).
+class CFIEncoder {
+public:
+  CFIEncoder(const CFIProgram &P, raw_ostream &OS, uint64_t CodeAlign,
+             int64_t DataAlign, endianness Endian, uint8_t AddressSize)
+      : P(P), OS(OS), CodeAlign(CodeAlign), DataAlign(DataAlign),
+        Endian(Endian), AddressSize(AddressSize) {}
+
+  Error encode(const CFIProgram::Instruction &I);
+
+private:
+  Error notMultiple(const CFIProgram::Instruction &I, int64_t Value,
+                    int64_t Factor) {
+    return createStringError(
+        errc::invalid_argument, "%s: %" PRId64 " is not a multiple of %" PRId64,
+        P.callFrameString(I.Opcode).str().c_str(), Value, Factor);
+  }
+
+  /// Operand Idx of I, which is factored by the old code or data alignment
+  /// factor, factored by the new one instead.
+  Expected<int64_t> refactor(const CFIProgram::Instruction &I, unsigned Idx,
+                             int64_t Factor) {
+    Expected<int64_t> Bytes = I.getOperandAsSigned(P, Idx);
+    if (!Bytes)
+      return Bytes.takeError();
+    if (*Bytes % Factor)
+      return notMultiple(I, *Bytes, Factor);
+    return *Bytes / Factor;
+  }
+
+  Error encodeAdvance(const CFIProgram::Instruction &I);
+  Error encodeOffset(const CFIProgram::Instruction &I);
+  Error encodeCFARule(const CFIProgram::Instruction &I);
+  Error encodeOperands(const CFIProgram::Instruction &I);
+
+  const CFIProgram &P;
+  raw_ostream &OS;
+  const uint64_t CodeAlign;
+  const int64_t DataAlign;
+  const endianness Endian;
+  const uint8_t AddressSize;
+};
+} // namespace
+
+Error CFIEncoder::encode(const CFIProgram::Instruction &I) {
+  switch (I.Opcode) {
+  case DW_CFA_nop:
+    return Error::success();
+  case DW_CFA_advance_loc:
+  case DW_CFA_advance_loc1:
+  case DW_CFA_advance_loc2:
+  case DW_CFA_advance_loc4:
+  case DW_CFA_MIPS_advance_loc8:
+    return encodeAdvance(I);
+  case DW_CFA_offset:
+  case DW_CFA_offset_extended:
+  case DW_CFA_offset_extended_sf:
+  case DW_CFA_val_offset:
+  case DW_CFA_val_offset_sf:
+    return encodeOffset(I);
+  case DW_CFA_def_cfa:
+  case DW_CFA_def_cfa_sf:
+  case DW_CFA_def_cfa_offset:
+  case DW_CFA_def_cfa_offset_sf:
+  case DW_CFA_LLVM_def_aspace_cfa:
+  case DW_CFA_LLVM_def_aspace_cfa_sf:
+    return encodeCFARule(I);
+  case DW_CFA_restore:
+  case DW_CFA_restore_extended:
+    if (I.Ops[0] < 0x40) {
+      OS << char(DW_CFA_restore | I.Ops[0]);
+    } else {
+      OS << char(DW_CFA_restore_extended);
+      encodeULEB128(I.Ops[0], OS);
+    }
+    return Error::success();
+  default:
+    return encodeOperands(I);
+  }
+}
+
+Error CFIEncoder::encodeAdvance(const CFIProgram::Instruction &I) {
+  Expected<uint64_t> Bytes = I.getOperandAsUnsigned(P, 0);
+  if (!Bytes)
+    return Bytes.takeError();
+  if (*Bytes % CodeAlign)
+    return notMultiple(I, *Bytes, CodeAlign);
+  uint64_t Delta = *Bytes / CodeAlign;
+  if (Delta < 0x40) {
+    OS << char(DW_CFA_advance_loc | Delta);
+  } else if (isUInt<8>(Delta)) {
+    OS << char(DW_CFA_advance_loc1) << char(Delta);
+  } else if (isUInt<16>(Delta)) {
+    OS << char(DW_CFA_advance_loc2);
+    support::endian::write<uint16_t>(OS, Delta, Endian);
+  } else if (isUInt<32>(Delta)) {
+    OS << char(DW_CFA_advance_loc4);
+    support::endian::write<uint32_t>(OS, Delta, Endian);
+  } else {
+    return createStringError(errc::invalid_argument,
+                             "advance of %" PRIu64 " is out of range", Delta);
+  }
+  return Error::success();
+}
+
+Error CFIEncoder::encodeOffset(const CFIProgram::Instruction &I) {
+  bool Val = I.Opcode == DW_CFA_val_offset || I.Opcode == DW_CFA_val_offset_sf;
+  uint64_t Reg = I.Ops[0];
+  Expected<int64_t> Off = refactor(I, 1, DataAlign);
+  if (!Off)
+    return Off.takeError();
+  if (*Off >= 0 && !Val && Reg < 0x40) {
+    OS << char(DW_CFA_offset | Reg);
+    encodeULEB128(*Off, OS);
+  } else if (*Off >= 0) {
+    OS << char(Val ? DW_CFA_val_offset : DW_CFA_offset_extended);
+    encodeULEB128(Reg, OS);
+    encodeULEB128(*Off, OS);
+  } else {
+    OS << char(Val ? DW_CFA_val_offset_sf : DW_CFA_offset_extended_sf);
+    encodeULEB128(Reg, OS);
+    encodeSLEB128(*Off, OS);
+  }
+  return Error::success();
+}
+
+Error CFIEncoder::encodeCFARule(const CFIProgram::Instruction &I) {
+  uint8_t UOp, SOp;
+  switch (I.Opcode) {
+  case DW_CFA_def_cfa:
+  case DW_CFA_def_cfa_sf:
+    UOp = DW_CFA_def_cfa;
+    SOp = DW_CFA_def_cfa_sf;
+    break;
+  case DW_CFA_def_cfa_offset:
+  case DW_CFA_def_cfa_offset_sf:
+    UOp = DW_CFA_def_cfa_offset;
+    SOp = DW_CFA_def_cfa_offset_sf;
+    break;
+  default:
+    UOp = DW_CFA_LLVM_def_aspace_cfa;
+    SOp = DW_CFA_LLVM_def_aspace_cfa_sf;
+    break;
+  }
+  bool HasReg = UOp != DW_CFA_def_cfa_offset;
+  Expected<int64_t> Off = I.getOperandAsSigned(P, HasReg ? 1 : 0);
+  if (!Off)
+    return Off.takeError();
+  // The unsigned forms take the offset in bytes, the signed ones factored by
+  // the data alignment factor.
+  unsigned USize = *Off >= 0 ? getULEB128Size(*Off) : UINT_MAX;
+  unsigned SSize =
+      *Off % DataAlign == 0 ? getSLEB128Size(*Off / DataAlign) : UINT_MAX;
+  if (USize == UINT_MAX && SSize == UINT_MAX)
+    return notMultiple(I, *Off, DataAlign);
+  bool Signed = SSize < USize;
+  OS << char(Signed ? SOp : UOp);
+  if (HasReg)
+    encodeULEB128(I.Ops[0], OS);
+  if (Signed)
+    encodeSLEB128(*Off / DataAlign, OS);
+  else
+    encodeULEB128(*Off, OS);
+  if (UOp == DW_CFA_LLVM_def_aspace_cfa)
+    encodeULEB128(I.Ops[2], OS);
+  return Error::success();
+}
+
+Error CFIEncoder::encodeOperands(const CFIProgram::Instruction &I) {
+  auto Types = CFIProgram::getOperandTypes()[I.Opcode];
+  if (Types[0] == CFIProgram::OT_Unset)
+    return createStringError(errc::invalid_argument,
+                             "cannot encode CFI opcode 0x%" PRIx8, I.Opcode);
+  OS << char(I.Opcode);
+  for (unsigned Idx = 0; Idx < CFIProgram::MaxOperands; ++Idx) {
+    switch (Types[Idx]) {
+    case CFIProgram::OT_Unset:
+    case CFIProgram::OT_None:
+      return Error::success();
+    case CFIProgram::OT_Register:
+    case CFIProgram::OT_Offset:
+    case CFIProgram::OT_AddressSpace:
+    case CFIProgram::OT_RAState:
+      encodeULEB128(I.Ops[Idx], OS);
+      break;
+    case CFIProgram::OT_Address:
+      if (AddressSize == 4)
+        support::endian::write<uint32_t>(OS, I.Ops[Idx], Endian);
+      else if (AddressSize == 8)
+        support::endian::write<uint64_t>(OS, I.Ops[Idx], Endian);
+      else
+        return createStringError(errc::invalid_argument,
+                                 "unsupported address size %" PRIu8,
+                                 AddressSize);
+      break;
+    case CFIProgram::OT_Expression: {
+      StringRef Bytes = I.Expression ? I.Expression->getData() : StringRef();
+      encodeULEB128(Bytes.size(), OS);
+      OS << Bytes;
+      break;
+    }
+    case CFIProgram::OT_FactoredCodeOffset:
+      // Only advances have these, and they are encoded above.
+      return createStringError(errc::invalid_argument,
+                               "cannot encode CFI opcode 0x%" PRIx8, I.Opcode);
+    case CFIProgram::OT_SignedFactCodeOffset:
+    case CFIProgram::OT_UnsignedFactDataOffset:
+    case CFIProgram::OT_SignedFactDataOffset: {
+      bool Code = Types[Idx] == CFIProgram::OT_SignedFactCodeOffset;
+      Expected<int64_t> V =
+          refactor(I, Idx, Code ? int64_t(CodeAlign) : DataAlign);
+      if (!V)
+        return V.takeError();
+      if (Types[Idx] == CFIProgram::OT_SignedFactCodeOffset ||
+          Types[Idx] == CFIProgram::OT_SignedFactDataOffset)
+        encodeSLEB128(*V, OS);
+      else if (*V >= 0)
+        encodeULEB128(*V, OS);
+      else
+        return createStringError(errc::invalid_argument,
+                                 "%s: negative unsigned operand",
+                                 P.callFrameString(I.Opcode).str().c_str());
+      break;
+    }
+    }
+  }
+  return Error::success();
+}
+
+Error CFIProgram::encode(raw_ostream &OS, uint64_t NewCodeAlign,
+                         int64_t NewDataAlign, bool IsLittleEndian,
+                         uint8_t AddressSize) const {
+  if (NewCodeAlign == 0 || NewDataAlign == 0)
+    return createStringError(errc::invalid_argument,
+                             "alignment factors must not be zero");
+  CFIEncoder Encoder(*this, OS, NewCodeAlign, NewDataAlign,
+                     IsLittleEndian ? endianness::little : endianness::big,
+                     AddressSize);
+  for (const Instruction &I : Instructions)
+    if (Error E = Encoder.encode(I))
+      return E;
+  return Error::success();
 }

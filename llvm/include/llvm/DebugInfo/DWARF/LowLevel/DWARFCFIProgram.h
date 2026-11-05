@@ -230,6 +230,14 @@ public:
     return C.takeError();
   }
 
+  /// Write the instructions as a CFI program for a CIE with the given
+  /// alignment factors. Advances, register offsets and CFA rules are rescaled
+  /// to the new factors and take their shortest forms; DW_CFA_nop padding is
+  /// dropped. Fails if a rescaled value is not a multiple of its new factor.
+  LLVM_ABI Error encode(raw_ostream &OS, uint64_t CodeAlignmentFactor,
+                        int64_t DataAlignmentFactor, bool IsLittleEndian,
+                        uint8_t AddressSize) const;
+
   void addInstruction(const Instruction &I) { Instructions.push_back(I); }
 
   /// Get a DWARF CFI call frame string for the given DW_CFA opcode.

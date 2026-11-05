@@ -1667,4 +1667,73 @@ TEST(DWARFDebugFrame, UnwindTable_DW_CFA_LLVM_def_aspace_cfa) {
   EXPECT_EQ(Rows[4].getRegisterLocations(), VerifyLocs);
 }
 
+static Expected<std::vector<uint8_t>>
+encodeCFI(ArrayRef<uint8_t> Instructions, uint64_t CodeAlign, int64_t DataAlign,
+          uint64_t NewCodeAlign, int64_t NewDataAlign) {
+  dwarf::CFIProgram P(CodeAlign, DataAlign, Triple::aarch64);
+  DWARFDataExtractor Data(Instructions, /*IsLittleEndian=*/true,
+                          /*AddressSize=*/8);
+  uint64_t Offset = 0;
+  if (Error E = P.parse(Data, &Offset, Instructions.size()))
+    return std::move(E);
+  std::string Out;
+  raw_string_ostream OS(Out);
+  if (Error E = P.encode(OS, NewCodeAlign, NewDataAlign,
+                         /*IsLittleEndian=*/true, /*AddressSize=*/8))
+    return std::move(E);
+  return std::vector<uint8_t>(Out.begin(), Out.end());
+}
+
+// From Clang's AArch64 alignment factors (1, -4) to GCC's (4, -8).
+TEST(DWARFCFIProgram, EncodeRescales) {
+  using namespace dwarf;
+  auto Check = [](ArrayRef<uint8_t> In, ArrayRef<uint8_t> Out) {
+    EXPECT_THAT_EXPECTED(encodeCFI(In, 1, -4, 4, -8), HasValue(Out.vec()));
+  };
+  Check({DW_CFA_advance_loc | 8}, {DW_CFA_advance_loc | 2});
+  Check({DW_CFA_advance_loc1, 0x40}, {DW_CFA_advance_loc | 0x10});
+  Check({DW_CFA_advance_loc2, 0x00, 0x04}, {DW_CFA_advance_loc2, 0x00, 0x01});
+  Check({DW_CFA_offset | 30, 2}, {DW_CFA_offset | 30, 1});
+  Check({DW_CFA_offset_extended_sf, 72, 12}, {DW_CFA_offset_extended, 72, 6});
+  Check({DW_CFA_def_cfa_offset, 16}, {DW_CFA_def_cfa_offset, 16});
+  Check({DW_CFA_def_cfa_sf, 29, 0x7c}, {DW_CFA_def_cfa, 29, 16});
+  Check({DW_CFA_AARCH64_set_ra_state, 2, 0x7c},
+        {DW_CFA_AARCH64_set_ra_state, 2, 0x7f});
+  // Instructions without offsets are copied, and padding is dropped.
+  Check({DW_CFA_remember_state, DW_CFA_nop, DW_CFA_restore_state},
+        {DW_CFA_remember_state, DW_CFA_restore_state});
+  Check({DW_CFA_def_cfa_expression, 2, DW_OP_breg0, 8},
+        {DW_CFA_def_cfa_expression, 2, DW_OP_breg0, 8});
+}
+
+TEST(DWARFCFIProgram, EncodeShortestForms) {
+  using namespace dwarf;
+  auto Check = [](ArrayRef<uint8_t> In, ArrayRef<uint8_t> Out) {
+    EXPECT_THAT_EXPECTED(encodeCFI(In, 4, -8, 4, -8), HasValue(Out.vec()));
+  };
+  Check({DW_CFA_restore_extended, 30}, {DW_CFA_restore | 30});
+  Check({DW_CFA_advance_loc4, 0x3f, 0x00, 0x00, 0x00},
+        {DW_CFA_advance_loc | 0x3f});
+  Check({DW_CFA_advance_loc4, 0x00, 0x00, 0x01, 0x00},
+        {DW_CFA_advance_loc4, 0x00, 0x00, 0x01, 0x00});
+  // A save above the CFA needs the signed form.
+  Check({DW_CFA_offset_extended_sf, 19, 0x7f},
+        {DW_CFA_offset_extended_sf, 19, 0x7f});
+  Check({DW_CFA_val_offset_sf, 30, 1}, {DW_CFA_val_offset, 30, 1});
+  // The unsigned form when both are as short, else the shorter one.
+  Check({DW_CFA_def_cfa_offset_sf, 0x80, 0x7f},
+        {DW_CFA_def_cfa_offset, 0x80, 0x08});
+  Check({DW_CFA_def_cfa_offset, 0x80, 0x80, 0x01},
+        {DW_CFA_def_cfa_offset_sf, 0x80, 0x70});
+}
+
+TEST(DWARFCFIProgram, EncodeNotMultiple) {
+  EXPECT_THAT_EXPECTED(
+      encodeCFI({dwarf::DW_CFA_advance_loc | 2}, 1, -4, 4, -8),
+      FailedWithMessage("DW_CFA_advance_loc: 2 is not a multiple of 4"));
+  EXPECT_THAT_EXPECTED(
+      encodeCFI({dwarf::DW_CFA_offset | 19, 1}, 1, -4, 4, -8),
+      FailedWithMessage("DW_CFA_offset: -4 is not a multiple of -8"));
+}
+
 } // end anonymous namespace
