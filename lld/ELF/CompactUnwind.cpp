@@ -98,9 +98,10 @@ State toState(const a64::Shape &s, const a64::Frame &f) {
   return st;
 }
 
-// A descriptor without its personality, and what it decodes to.
+// A descriptor without its personality, the layout descriptor it references
+// if it is PARTIAL, and what they decode to.
 struct Desc {
-  uint64_t bits = 0;
+  uint64_t bits = 0, layout = 0;
   a64::Shape shape;
 };
 
@@ -134,6 +135,7 @@ struct Fn {
   SmallVector<State, 8> states;
   // states[k] equals states[j] iff ids[k] == ids[j] (filled by encodeAsync).
   SmallVector<uint32_t, 8> ids;
+  SmallVector<uint32_t, 4> layouts;
   SmallVector<unsigned, 0> calls;
   // bodyCandidates' results, shared with the functions encoded alongside.
   StringMap<SmallVector<Desc, 4>> *candidates = nullptr;
@@ -310,11 +312,13 @@ private:
 // Region search (descriptor candidates, async regions, sync runs)
 //===----------------------------------------------------------------------===//
 
-// The descriptors whose body is st, smallest O first, then by convention. A
-// state that more than one convention describes gets LLVM's, which Clang's
-// other frames use, so that neighbouring regions' descriptors can match.
+// The descriptors whose body is st, best first: not PARTIAL, then the smallest
+// O, then by convention. A state that more than one convention describes gets
+// LLVM's, which Clang's other frames use, so that neighbouring regions'
+// descriptors can match.
 const SmallVector<Desc, 4> &bodyCandidates(Fn &fn, const State &st) {
-  // The candidates depend on the state and the RA scheme.
+  // The candidates depend on the state, the RA scheme and the function's
+  // layouts that save more than the state.
   uint64_t ra = raField(fn, st) << a64::RAShift;
   SmallString<64> key;
   auto put = [&](auto v) {
@@ -327,20 +331,27 @@ const SmallVector<Desc, 4> &bodyCandidates(Fn &fn, const State &st) {
   for (uint32_t m = st.Saved; m; m &= m - 1)
     put(st.off[llvm::countr_zero(m)]);
   put(ra);
+  for (uint32_t l : fn.layouts)
+    if ((st.Saved & ~l) == 0 && l != st.Saved)
+      put(l);
   auto [it, inserted] = fn.candidates->try_emplace(key);
   SmallVector<Desc, 4> &out = it->second;
   if (!inserted)
     return out;
-  auto add = [&](uint64_t bits) {
-    Desc d{bits, {}};
-    if (a64::decodeShape(bits, 0, d.shape) &&
+  auto add = [&](uint64_t bits, uint64_t layout) {
+    Desc d{bits, layout, {}};
+    if (a64::decodeShape(bits, layout, d.shape) &&
         toState(d.shape, a64::frameAt(d.shape, 1, 0)) == st)
       out.push_back(d);
   };
   if (st.isFrameless()) {
-    add(a64::ModeNull | convBits(a64::ConvLLVM, st.X18) | ra);
+    add(a64::ModeNull | convBits(a64::ConvLLVM, st.X18) | ra, 0);
   } else {
     uint32_t regs = st.Saved;
+    SmallVector<uint32_t, 4> lays = {regs};
+    for (uint32_t l : fn.layouts)
+      if ((regs & ~l) == 0 && l != regs)
+        lays.push_back(l);
     // A frame record has x29 just below x30, and d8-d15 sit below the
     // general registers in LLVM's convention and above them in GCC's.
     bool recordOk = (regs & FrameRecordCSRs) != FrameRecordCSRs ||
@@ -355,51 +366,68 @@ const SmallVector<Desc, 4> &bodyCandidates(Fn &fn, const State &st) {
     }
     bool both = gprLo != INT32_MAX && fprLo != INT32_MAX;
     bool fprBelow = both && fprHi < gprLo, fprAbove = both && fprLo > gprHi;
-    for (bool fr : {true, false}) {
-      // Frame-pointer frames need the frame record.
-      if (fr ? (regs & FrameRecordCSRs) != FrameRecordCSRs || !recordOk
-             : st.CFAIsFP)
-        continue;
-      for (a64::Convention conv :
-           {a64::ConvLLVM, a64::ConvGCC, a64::ConvGCCTop}) {
-        // The shadow call stack only exists with the LLVM convention.
-        if (conv == a64::ConvLLVM ? fprAbove : st.X18 || fprBelow)
+    for (uint32_t lay : lays) {
+      for (bool fr : {true, false}) {
+        // Frame-pointer frames need the frame record.
+        if (fr ? (lay & FrameRecordCSRs) != FrameRecordCSRs || !recordOk
+               : st.CFAIsFP)
           continue;
-        unsigned N = 0;
-        if (!st.CFAIsFP || conv == a64::ConvGCC) {
-          if (st.CFAOffset % 16 || st.CFAOffset < 0 ||
-              st.CFAOffset / 16 > int(a64::MaxN))
+        for (a64::Convention conv :
+             {a64::ConvLLVM, a64::ConvGCC, a64::ConvGCCTop}) {
+          // The shadow call stack only exists with the LLVM convention.
+          if (conv == a64::ConvLLVM ? fprAbove : st.X18 || fprBelow)
             continue;
-          N = st.CFAOffset / 16;
-        }
-        auto bitsFor = [&](unsigned O) {
-          return (st.CFAIsFP ? a64::ModeFP : a64::ModeSP) |
-                 convBits(conv, st.X18) | ra | regBits(regs, fr) |
-                 uint64_t(O) << a64::OShift | uint64_t(N) << a64::NShift;
-        };
-        // O moves every slot by the same 16·O bytes (up for GCC's
-        // sp-anchored convention, down for the others), so any saved
-        // register's offset gives it.
-        a64::Shape s0;
-        if (!a64::decodeShape(bitsFor(0), 0, s0))
-          continue;
-        int o = 0;
-        if (uint32_t m = regs & s0.Slots.Mask) {
-          int r = llvm::countr_zero(m);
-          int delta = conv == a64::ConvGCC ? st.off[r] - s0.Slots.Offsets[r]
-                                           : s0.Slots.Offsets[r] - st.off[r];
-          if (delta < 0 || delta % 16)
+          unsigned N = 0;
+          if (!st.CFAIsFP || conv == a64::ConvGCC) {
+            if (st.CFAOffset % 16 || st.CFAOffset < 0 ||
+                st.CFAOffset / 16 > int(a64::MaxN))
+              continue;
+            N = st.CFAOffset / 16;
+          }
+          auto bitsFor = [&](unsigned O, uint64_t &layout) {
+            uint64_t n = uint64_t(N) << a64::NShift;
+            if (lay == regs) {
+              layout = 0;
+              return (st.CFAIsFP ? a64::ModeFP : a64::ModeSP) |
+                     convBits(conv, st.X18) | ra | regBits(lay, fr) |
+                     uint64_t(O) << a64::OShift | n;
+            }
+            // PARTIAL: the convention field only marks the shadow call stack,
+            // and the frame record bit is clear; the layout descriptor has
+            // both.
+            layout = a64::ModeSP | convBits(conv, false) | regBits(lay, fr) |
+                     uint64_t(O) << a64::OShift;
+            return (st.CFAIsFP ? a64::ModePartialFP : a64::ModePartialSP) |
+                   convBits(a64::ConvLLVM, st.X18) | ra | regBits(regs, false) |
+                   n;
+          };
+          // O moves every slot by the same 16·O bytes (up for GCC's
+          // sp-anchored convention, down for the others), so any saved
+          // register's offset gives it.
+          uint64_t layout;
+          uint64_t bits = bitsFor(0, layout);
+          a64::Shape s0;
+          if (!a64::decodeShape(bits, layout, s0))
             continue;
-          o = delta / 16;
+          int o = 0;
+          if (uint32_t m = regs & s0.Slots.Mask) {
+            int r = llvm::countr_zero(m);
+            int delta = conv == a64::ConvGCC ? st.off[r] - s0.Slots.Offsets[r]
+                                             : s0.Slots.Offsets[r] - st.off[r];
+            if (delta < 0 || delta % 16)
+              continue;
+            o = delta / 16;
+          }
+          if (o > int(st.CFAIsFP && conv == a64::ConvGCC ? 0 : a64::MaxO))
+            continue;
+          bits = bitsFor(o, layout);
+          add(bits, layout);
         }
-        if (o > int(st.CFAIsFP && conv == a64::ConvGCC ? 0 : a64::MaxO))
-          continue;
-        add(bitsFor(o));
       }
     }
     llvm::stable_sort(out, [](const Desc &a, const Desc &b) {
-      return std::make_pair(a.shape.O, a.shape.Conv) <
-             std::make_pair(b.shape.O, b.shape.Conv);
+      return std::make_tuple(a.shape.Partial, a.shape.O, a.shape.Conv) <
+             std::make_tuple(b.shape.Partial, b.shape.O, b.shape.Conv);
     });
   }
   return out;
@@ -500,8 +528,9 @@ std::optional<Desc> tryRegion(Fn &fn, unsigned a, unsigned b) {
     return std::nullopt;
   unsigned PS = w->PS, EpiLen = w->EpiLen, TailLen = w->TailLen;
   std::optional<int32_t> nsp = w->spOff;
+  std::optional<Desc> best;
   for (const Desc &c : bodyCandidates(fn, *body->st)) {
-    if ((PS || TailLen) && c.shape.Mode == a64::ModeNull)
+    if ((PS || TailLen) && (c.shape.Partial || c.shape.Mode == a64::ModeNull))
       continue;
     if (c.shape.Mode == a64::ModeSP && nsp && *nsp != 16 * int(c.shape.N))
       continue;
@@ -519,7 +548,8 @@ std::optional<Desc> tryRegion(Fn &fn, unsigned a, unsigned b) {
               uint64_t(TailLen != 0) << a64::HasEpilogueShift;
     // The slots, akind and EpiLen follow from the frame shape alone.
     a64::Shape &s = d.shape;
-    if (!a64::decodeShape(d.bits, 0, s) || (TailLen && EpiLen != s.EpiLen))
+    if (!a64::decodeShape(d.bits, d.layout, s) ||
+        (TailLen && EpiLen != s.EpiLen))
       continue;
     // The tail is signed to its end only if the CFI says so at the last
     // instruction, which matters only when the tail outlasts its signed
@@ -576,17 +606,22 @@ std::optional<Desc> tryRegion(Fn &fn, unsigned a, unsigned b) {
       }
     if (!ok)
       continue;
-    return d;
+    if (!s.Partial)
+      return d;
+    if (!best)
+      best = d;
   }
-  return std::nullopt;
+  return best;
 }
 
 // What the table needs of a region's descriptor.
 struct RegionDesc {
-  uint64_t bits;
+  uint64_t bits, layout;
   uint8_t ps, tailLen;
+  bool partial;
   RegionDesc(const Desc &d)
-      : bits(d.bits), ps(d.shape.PS), tailLen(d.shape.TailLen) {}
+      : bits(d.bits), layout(d.layout), ps(d.shape.PS),
+        tailLen(d.shape.TailLen), partial(d.shape.Partial) {}
 };
 using Regions = SmallVector<std::pair<unsigned, RegionDesc>, 2>;
 
@@ -602,7 +637,7 @@ using Regions = SmallVector<std::pair<unsigned, RegionDesc>, 2>;
 // with no prologue.
 //
 // The previous region can only end in a tail if its frame was last sp-based
-// (an SP body or an epilogue window). The tail then takes the
+// (an SP body or an epilogue window) and not PARTIAL. The tail then takes the
 // frameless run up to the next region's canonical lead-in if that fits, else
 // just the signed part of the run and the return, leaving the rest to a
 // frameless region. Otherwise the run goes to the next region's lead-in.
@@ -646,7 +681,9 @@ bool encodeAsync(Fn &fn, Regions &out) {
                              : 1 + scs + (st.RASigned ? (st.raPc ? 2 : 1) : 0);
     unsigned P;
     const State *last = havePrev ? &fn.states[prevEndSeg - 1] : nullptr;
-    if (last && !last->CFAIsFP && !bodyCandidates(fn, *last).empty()) {
+    if (last && !last->CFAIsFP &&
+        llvm::any_of(bodyCandidates(fn, *last),
+                     [](const Desc &d) { return !d.shape.Partial; })) {
       unsigned minTail = prevEnd;
       for (size_t j = prevEndSeg; j < kb && fn.states[j].RASigned; ++j)
         minTail = segEnd(j);
@@ -888,12 +925,13 @@ struct CompactUnwindTable::Impl {
   CompactUnwindKind kind;
 
   struct LDesc {
-    uint64_t bits;
+    uint64_t bits;  // without the layout reference
+    int32_t layout; // logical descriptor providing the layout, or -1
     bool foldable;
     bool hasEpi;
   };
   SmallVector<LDesc, 0> ldescs;
-  DenseMap<uint64_t, uint32_t> ldescIds;
+  DenseMap<std::pair<uint64_t, int32_t>, uint32_t> ldescIds;
 
   struct Func {
     Symbol *sym;
@@ -966,10 +1004,10 @@ struct CompactUnwindTable::Impl {
 
   Impl(Ctx &ctx) : ctx(ctx), kind(ctx.arg.zCompactUnwind) {}
 
-  uint32_t getLDesc(uint64_t bits, bool foldable, bool hasEpi) {
-    auto [it, inserted] = ldescIds.try_emplace(bits, ldescs.size());
+  uint32_t getLDesc(uint64_t bits, int32_t layout, bool foldable, bool hasEpi) {
+    auto [it, inserted] = ldescIds.try_emplace({bits, layout}, ldescs.size());
     if (inserted)
-      ldescs.push_back({bits, foldable, hasEpi});
+      ldescs.push_back({bits, layout, foldable, hasEpi});
     return it->second;
   }
 
@@ -1089,6 +1127,30 @@ void CompactUnwindTable::Impl::encode() {
         interp.why = "non_hint_pauth";
     }
     if (interp.why.empty()) {
+      // Layout candidates: maximal saved sets, plus their union when every
+      // register always lives in the same slot (separate shrink-wrapping).
+      SmallVector<uint32_t, 4> sets;
+      for (const State &st : fn.states)
+        if (st.Saved && !llvm::is_contained(sets, st.Saved))
+          sets.push_back(st.Saved);
+      for (uint32_t s : sets)
+        if (llvm::none_of(sets,
+                          [&](uint32_t t) { return (s & ~t) == 0 && s != t; }))
+          fn.layouts.push_back(s);
+      if (fn.layouts.size() > 1) {
+        a64::SaveSlots slot{};
+        bool agree = true;
+        for (const State &st : fn.states)
+          for (uint32_t m = st.Saved; m; m &= m - 1) {
+            int reg = llvm::countr_zero(m);
+            if (slot.Mask >> reg & 1)
+              agree &= slot.Offsets[reg] == st.off[reg];
+            else
+              slot.set(reg, st.off[reg]);
+          }
+        if (agree && !llvm::is_contained(fn.layouts, slot.Mask))
+          fn.layouts.push_back(slot.Mask);
+      }
       bool ok;
       if (sync) {
         bool frameOnce = describesFrameOnce(fn);
@@ -1179,20 +1241,22 @@ void CompactUnwindTable::Impl::encode() {
                       uint64_t(cie.mte) << a64::EscMTEShift |
                       uint64_t(cie.nonHintPAuth) << a64::EscNonHintShift |
                       persBits | uint64_t(it->second) << a64::EscOffsetShift;
-      f.regions.push_back({0, getLDesc(bits, false, false)});
+      f.regions.push_back({0, getLDesc(bits, -1, false, false)});
       funcs.push_back(std::move(f));
       continue;
     }
     for (auto &[off, d] : e.regions) {
       uint64_t bits = d.bits | persBits;
+      int32_t layout = d.partial ? getLDesc(d.layout, -1, true, false) : -1;
       // Windows are relative to the region start, which folding would move, so
       // descriptors with windows don't fold.
       bool pe = d.ps || d.tailLen;
-      f.regions.push_back({off * 4, getLDesc(bits, !pe, d.tailLen != 0)});
+      f.regions.push_back(
+          {off * 4, getLDesc(bits, layout, !pe, d.tailLen != 0)});
     }
     funcs.push_back(std::move(f));
   }
-  noInfo = getLDesc(a64::ModeNoInfo, true, false);
+  noInfo = getLDesc(a64::ModeNoInfo, -1, true, false);
 }
 
 size_t CompactUnwindTable::Impl::layout(uint64_t hdrVA) {
@@ -1313,23 +1377,40 @@ size_t CompactUnwindTable::Impl::layout(uint64_t hdrVA) {
   endVA = prevEnd;
   laidOutVAs = std::move(vas);
 
-  // Global descriptors: the most frequent ones.
+  // Global descriptors: the most frequent ones, where a PARTIAL descriptor's
+  // uses count for its layout too. A global PARTIAL descriptor's layout must
+  // be global.
   SmallVector<uint32_t, 0> counts(ldescs.size());
-  for (const Entry &e : entries)
+  for (const Entry &e : entries) {
     ++counts[e.ldesc];
+    if (int32_t layout = ldescs[e.ldesc].layout; layout >= 0)
+      ++counts[layout];
+  }
   SmallVector<std::pair<int64_t, uint32_t>, 0> keyedCounts;
   for (size_t id = 0; id < counts.size(); ++id)
     if (counts[id])
       keyedCounts.push_back({-int64_t(counts[id]), id});
   llvm::sort(keyedCounts);
-  globals.clear();
+  SmallVector<uint32_t, 0> byCount;
   for (auto [c, id] : keyedCounts)
-    globals.push_back(id);
-  if (globals.size() > cu::MaxGlobalDescriptors)
-    globals.resize(cu::MaxGlobalDescriptors);
+    byCount.push_back(id);
+  globals.clear();
   globalIdx.clear();
-  for (size_t i = 0; i < globals.size(); ++i)
-    globalIdx[globals[i]] = i;
+  auto addGlobal = [&](uint32_t id) {
+    globalIdx[id] = globals.size();
+    globals.push_back(id);
+  };
+  for (uint32_t id : byCount) {
+    if (globalIdx.count(id))
+      continue;
+    int32_t layout = ldescs[id].layout;
+    bool addLayout = layout >= 0 && !globalIdx.count(layout);
+    if (globals.size() + 1 + addLayout > cu::MaxGlobalDescriptors)
+      continue;
+    if (addLayout)
+      addGlobal(layout);
+    addGlobal(id);
+  }
 
   // Pages.
   pages.clear();
@@ -1340,27 +1421,35 @@ size_t CompactUnwindTable::Impl::layout(uint64_t hdrVA) {
   };
   for (size_t i = 0; i < entries.size(); ++i) {
     const Entry &e = entries[i];
-    bool isGlobal = globalIdx.count(e.ldesc);
+    // The local descriptors the entry needs: its own, and the layout of a
+    // local PARTIAL descriptor.
+    SmallVector<uint32_t, 2> needed;
+    if (!globalIdx.count(e.ldesc)) {
+      needed.push_back(e.ldesc);
+      int32_t layout = ldescs[e.ldesc].layout;
+      if (layout >= 0 && !globalIdx.count(layout))
+        needed.push_back(layout);
+    }
+    auto addLocals = [&](Page &p) {
+      for (uint32_t id : needed)
+        if (localIdx.try_emplace(id, p.locals.size()).second)
+          p.locals.push_back(id);
+    };
     if (!pages.empty()) {
       Page &p = pages.back();
-      bool newLocal = !isGlobal && !localIdx.count(e.ldesc);
-      size_t nl = p.locals.size() + newLocal;
+      size_t nl = p.locals.size() + llvm::count_if(needed, [&](uint32_t id) {
+                    return !localIdx.count(id);
+                  });
       if ((e.va - p.va) / 4 < (1u << 20) && nl <= 4096 - ng &&
           pageBytes(p.count + 1, nl) <= cu::PageSize) {
-        if (newLocal) {
-          localIdx[e.ldesc] = p.locals.size();
-          p.locals.push_back(e.ldesc);
-        }
+        addLocals(p);
         ++p.count;
         continue;
       }
     }
     pages.push_back({e.va, i, 1, {}, 0});
     localIdx.clear();
-    if (!isGlobal) {
-      localIdx[e.ldesc] = 0;
-      pages.back().locals.push_back(e.ldesc);
-    }
+    addLocals(pages.back());
   }
 
   // Side table pages: u16 pc offsets, then payloads.
@@ -1439,7 +1528,19 @@ void CompactUnwindTable::Impl::write(uint8_t *buf, uint64_t hdrVA) {
                       : p.sym->getVA(ctx, p.addend)));
   }
 
-  auto finalBits = [&](uint32_t id) { return ldescs[id].bits; };
+  // Descriptor indices, global or in the current page.
+  DenseMap<uint32_t, uint32_t> localIdx;
+  auto index = [&](uint32_t id) {
+    auto it = globalIdx.find(id);
+    return it != globalIdx.end() ? it->second : localIdx.lookup(id);
+  };
+  auto finalBits = [&](uint32_t id) {
+    const LDesc &l = ldescs[id];
+    uint64_t bits = l.bits;
+    if (l.layout >= 0)
+      bits |= uint64_t(index(l.layout)) << a64::LayoutShift;
+    return bits;
+  };
   for (size_t i = 0; i < globals.size(); ++i)
     write64(ctx, buf + gdescOff + 8 * i, finalBits(globals[i]));
 
@@ -1451,15 +1552,14 @@ void CompactUnwindTable::Impl::write(uint8_t *buf, uint64_t hdrVA) {
     size_t localOff = p.locals.empty() ? 0 : alignTo(4 + 4 * p.count, 8);
     write16(ctx, pb, p.count);
     write16(ctx, pb + 2, localOff);
-    DenseMap<uint32_t, uint32_t> localIdx;
-    for (size_t j = 0; j < p.locals.size(); ++j) {
+    localIdx.clear();
+    for (size_t j = 0; j < p.locals.size(); ++j)
       localIdx[p.locals[j]] = globals.size() + j;
+    for (size_t j = 0; j < p.locals.size(); ++j)
       write64(ctx, pb + localOff + 8 * j, finalBits(p.locals[j]));
-    }
     for (size_t j = 0; j < p.count; ++j) {
       const Entry &e = entries[p.first + j];
-      auto it = globalIdx.find(e.ldesc);
-      uint32_t idx = it != globalIdx.end() ? it->second : localIdx[e.ldesc];
+      uint32_t idx = index(e.ldesc);
       uint64_t delta = e.va - p.va;
       if (delta % 4)
         Err(ctx) << "compact unwind: misaligned function at 0x"
