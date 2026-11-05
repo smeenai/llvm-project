@@ -180,6 +180,10 @@ public:
     return Pos->second;
   }
 
+  /// Iterates over (register number, location) pairs in register order.
+  auto begin() const { return Locations.begin(); }
+  auto end() const { return Locations.end(); }
+
   SmallVector<uint32_t, 4> getRegisters() const {
     SmallVector<uint32_t, 4> Registers;
     for (auto &&[Register, _] : Locations)
