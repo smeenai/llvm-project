@@ -23,6 +23,8 @@
 #include "Symbols.h"
 #include "Target.h"
 #include "llvm/BinaryFormat/Dwarf.h"
+#include "llvm/Support/LEB128.h"
+#include <optional>
 
 using namespace llvm;
 using namespace llvm::ELF;
@@ -35,8 +37,8 @@ namespace {
 class EhReader {
 public:
   EhReader(const InputSectionBase *s, ArrayRef<uint8_t> d) : isec(s), d(d) {}
-  uint8_t getFdeEncoding();
-  bool hasLSDA();
+  EhCie readCie();
+  EhFde readFde(const EhCie &cie);
 
 private:
   template <class P> void errOn(const P *loc, const Twine &msg) {
@@ -48,9 +50,10 @@ private:
   uint8_t readByte();
   void skipBytes(size_t count);
   StringRef readString();
-  void skipLeb128();
-  void skipAugP();
-  StringRef getAugmentation();
+  uint64_t readULEB128();
+  int64_t readSLEB128();
+  uint64_t readFixed(size_t size);
+  uint8_t skipAugP();
 
   const InputSectionBase *isec;
   ArrayRef<uint8_t> d;
@@ -87,19 +90,45 @@ StringRef EhReader::readString() {
   return s;
 }
 
-// Skip an integer encoded in the LEB128 format.
-// Actual number is not of interest because only the runtime needs it.
-// But we need to be at least able to skip it so that we can read
-// the field that follows a LEB128 number.
-void EhReader::skipLeb128() {
-  const uint8_t *errPos = d.data();
-  while (!d.empty()) {
-    uint8_t val = d.front();
-    d = d.slice(1);
-    if ((val & 0x80) == 0)
-      return;
+uint64_t EhReader::readULEB128() {
+  unsigned n;
+  const char *err = nullptr;
+  uint64_t v = decodeULEB128(d.data(), &n, d.end(), &err);
+  if (err) {
+    errOn(d.data(), "corrupted CIE (failed to read LEB128)");
+    d = {};
+    return 0;
   }
-  errOn(errPos, "corrupted CIE (failed to read LEB128)");
+  d = d.slice(n);
+  return v;
+}
+
+int64_t EhReader::readSLEB128() {
+  unsigned n;
+  const char *err = nullptr;
+  int64_t v = decodeSLEB128(d.data(), &n, d.end(), &err);
+  if (err) {
+    errOn(d.data(), "corrupted CIE (failed to read LEB128)");
+    d = {};
+    return 0;
+  }
+  d = d.slice(n);
+  return v;
+}
+
+// Read an unsigned integer of the given size in the target's byte order.
+uint64_t EhReader::readFixed(size_t size) {
+  if (d.size() < size) {
+    errOn(d.data(), "corrupted FDE");
+    d = {};
+    return 0;
+  }
+  bool isLE = isec->file->ctx.arg.isLE;
+  uint64_t v = 0;
+  for (size_t i = 0; i < size; ++i)
+    v |= uint64_t(d[i]) << (8 * (isLE ? i : size - 1 - i));
+  d = d.slice(size);
+  return v;
 }
 
 static size_t getAugPSize(Ctx &ctx, unsigned enc) {
@@ -120,25 +149,40 @@ static size_t getAugPSize(Ctx &ctx, unsigned enc) {
   return 0;
 }
 
-void EhReader::skipAugP() {
+// Skip a pointer-encoding byte and the pointer it describes, and return the
+// encoding.
+uint8_t EhReader::skipAugP() {
   uint8_t enc = readByte();
-  if ((enc & 0xf0) == DW_EH_PE_aligned)
-    return errOn(d.data() - 1, "DW_EH_PE_aligned encoding is not supported");
+  if ((enc & 0xf0) == DW_EH_PE_aligned) {
+    errOn(d.data() - 1, "DW_EH_PE_aligned encoding is not supported");
+    return enc;
+  }
   size_t size = getAugPSize(isec->getCtx(), enc);
   if (size == 0)
-    return errOn(d.data() - 1, "unknown FDE encoding");
-  if (size >= d.size())
-    return errOn(d.data() - 1, "corrupted CIE");
-  d = d.slice(size);
+    errOn(d.data() - 1, "unknown FDE encoding");
+  else if (size >= d.size())
+    errOn(d.data() - 1, "corrupted CIE");
+  else
+    d = d.slice(size);
+  return enc;
+}
+
+EhCie elf::parseCie(const EhInputSection &sec, const EhSectionPiece &p) {
+  return EhReader(&sec, p.data(sec)).readCie();
+}
+
+EhFde elf::parseFde(const EhInputSection &sec, const EhSectionPiece &p,
+                    const EhCie &cie) {
+  return EhReader(&sec, p.data(sec)).readFde(cie);
 }
 
 uint8_t elf::getFdeEncoding(const EhInputSection &sec,
                             const EhSectionPiece &p) {
-  return EhReader(&sec, p.data(sec)).getFdeEncoding();
+  return parseCie(sec, p).fdeEnc;
 }
 
 bool elf::hasLSDA(const EhInputSection &sec, const EhSectionPiece &p) {
-  return EhReader(&sec, p.data(sec)).hasLSDA();
+  return parseCie(sec, p).aug.contains('L');
 }
 
 // pc_range follows the 4-byte length, 4-byte CIE pointer, and pc_begin, and
@@ -166,67 +210,85 @@ bool elf::hasZeroPcRange(const EhInputSection &sec, const EhSectionPiece &p,
   return true;
 }
 
-StringRef EhReader::getAugmentation() {
+EhCie EhReader::readCie() {
+  EhCie c;
+  const uint8_t *start = d.data();
   skipBytes(8);
   int version = readByte();
   if (version != 1 && version != 3) {
     errOn(d.data() - 1,
           "FDE version 1 or 3 expected, but got " + Twine(version));
-    return {};
+    return c;
   }
 
-  StringRef aug = readString();
+  c.aug = readString();
+  c.codeAlign = readULEB128();
+  c.dataAlign = readSLEB128();
+  // In CIE version 1 the return address register is a single byte. In CIE
+  // version 3 it is an unsigned LEB128.
+  c.raReg = version == 1 ? readByte() : readULEB128();
 
-  // Skip code and data alignment factors.
-  skipLeb128();
-  skipLeb128();
-
-  // Skip the return address register. In CIE version 1 this is a single
-  // byte. In CIE version 3 this is an unsigned LEB128.
-  if (version == 1)
-    readByte();
-  else
-    skipLeb128();
-  return aug;
-}
-
-uint8_t EhReader::getFdeEncoding() {
-  // We only care about an 'R' value, but other records may precede an 'R'
-  // record. Unfortunately records are not in TLV (type-length-value) format,
-  // so we need to teach the linker how to skip records for each type.
-  StringRef aug = getAugmentation();
-  for (char c : aug) {
-    if (c == 'R')
-      return readByte();
-    if (c == 'z')
-      skipLeb128();
-    else if (c == 'L')
-      readByte();
-    else if (c == 'P')
-      skipAugP();
-    else if (c != 'B' && c != 'S' && c != 'G') {
-      errOn(aug.data(), "unknown .eh_frame augmentation string: " + aug);
+  // Augmentation data is not in TLV (type-length-value) format, so each
+  // record type has to be known to find the ones after it.
+  std::optional<ArrayRef<uint8_t>> afterAug;
+  for (char ch : c.aug) {
+    switch (ch) {
+    case 'z': {
+      uint64_t len = readULEB128();
+      if (len > d.size()) {
+        errOn(d.data(), "corrupted CIE");
+        return c;
+      }
+      afterAug = d.slice(len);
       break;
     }
-  }
-  return DW_EH_PE_absptr;
-}
-
-bool EhReader::hasLSDA() {
-  StringRef aug = getAugmentation();
-  for (char c : aug) {
-    if (c == 'L')
-      return true;
-    if (c == 'z')
-      skipLeb128();
-    else if (c == 'P')
-      skipAugP();
-    else if (c == 'R')
-      readByte();
-    else if (c != 'B' && c != 'S' && c != 'G') {
-      errOn(aug.data(), "unknown .eh_frame augmentation string: " + aug);
+    case 'L':
+      c.lsdaEnc = readByte();
       break;
+    case 'R':
+      c.fdeEnc = readByte();
+      break;
+    case 'P':
+      c.persOff = d.data() + 1 - start;
+      c.persEnc = skipAugP();
+      break;
+    case 'B':
+    case 'S':
+    case 'G':
+    case 'N':
+      break;
+    default:
+      errOn(c.aug.data(), "unknown .eh_frame augmentation string: " + c.aug);
+      return c;
     }
   }
-  return false;
+  c.insns = afterAug ? *afterAug : d;
+  return c;
+}
+
+// pc_begin and pc_range follow the 4-byte length and 4-byte CIE pointer, in
+// the CIE's FDE encoding. With a 'z' augmentation, augmentation data (of which
+// the linker reads only the LSDA pointer) precedes the instructions.
+EhFde EhReader::readFde(const EhCie &cie) {
+  EhFde f;
+  const uint8_t *start = d.data();
+  Ctx &ctx = isec->getCtx();
+  size_t pSize = getAugPSize(ctx, cie.fdeEnc);
+  skipBytes(8 + pSize);
+  f.pcRange = readFixed(pSize);
+  if (cie.aug.starts_with("z")) {
+    uint64_t len = readULEB128();
+    if (len > d.size()) {
+      errOn(d.data(), "corrupted FDE");
+      return f;
+    }
+    ArrayRef<uint8_t> insns = d.slice(len);
+    if (cie.lsdaEnc != DW_EH_PE_omit) {
+      f.lsdaOff = d.data() - start;
+      f.lsda = readFixed(getAugPSize(ctx, cie.lsdaEnc));
+    }
+    d = insns;
+  }
+  f.insns = d;
+  return f;
 }
