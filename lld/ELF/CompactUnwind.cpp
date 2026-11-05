@@ -950,6 +950,7 @@ struct CompactUnwindTable::Impl {
     int32_t layout; // logical descriptor providing the layout, or -1
     bool foldable;
     bool hasEpi;
+    uint8_t tailLen = 0; // effective tail length, for epilogue descriptors
   };
   SmallVector<LDesc, 0> ldescs;
   DenseMap<std::pair<uint64_t, int32_t>, uint32_t> ldescIds;
@@ -1297,6 +1298,8 @@ void CompactUnwindTable::Impl::encode() {
       bool pe = d.ps || d.tailLen || pacInN;
       f.regions.push_back(
           {off * 4, getLDesc(bits, layout, !pe, d.tailLen != 0)});
+      if (d.tailLen)
+        ldescs[f.regions.back().second].tailLen = d.tailLen;
     }
     if (!needPacRow)
       f.pacSite.reset();
@@ -1407,10 +1410,26 @@ size_t CompactUnwindTable::Impl::layout(uint64_t hdrVA) {
       // first.
       continue;
     }
-    // A region with an epilogue can't extend over padding, since its epilogue
-    // is anchored at the region's end.
-    if (havePrev && va > prevEnd && (prevEpi || !isPadding(prevEnd, va)))
-      push(prevEnd, noInfo);
+    if (havePrev && va > prevEnd) {
+      bool pad = isPadding(prevEnd, va);
+      uint64_t gap = (va - prevEnd) / 4;
+      Entry &last = entries.back();
+      if (prevEpi && pad && (va - prevEnd) % 4 == 0 &&
+          ldescs[last.ldesc].tailLen + gap <= a64::MaxTailLen) {
+        // Grow the tail over the padding; the epilogue window and the signed
+        // part of the tail keep their positions relative to the tail start.
+        LDesc l = ldescs[last.ldesc];
+        unsigned tailLen = l.tailLen + gap;
+        uint64_t bits = (l.bits & ~(uint64_t(0xf) << a64::TailLenShift)) |
+                        uint64_t(tailLen) << a64::TailLenShift;
+        uint32_t id = getLDesc(bits, l.layout, l.foldable, true);
+        ldescs[id].tailLen = tailLen;
+        last.ldesc = id;
+        prevDesc = id;
+      } else if (prevEpi || !pad) {
+        push(prevEnd, noInfo);
+      }
+    }
     for (auto [off, id] : f.regions)
       push(va + off, id);
     if (f.pers)

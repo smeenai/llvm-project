@@ -7,12 +7,9 @@
 // RUN: llvm-readobj --unwind %t | FileCheck %s
 
 // CHECK:      Start: 0x210000
-// CHECK-NEXT: End: 0x210010
-// CHECK:      Mode: SP
-// CHECK:      Epilogue: window=0 tail=1
-// CHECK:      Start: 0x210010
 // CHECK-NEXT: End: 0x210020
-// CHECK:      Mode: NoInfo
+// CHECK:      Mode: SP
+// CHECK:      Epilogue: window=0 tail=5
 // CHECK:      Start: 0x210020
 // CHECK-NEXT: End: 0x210030
 // CHECK:      Mode: SP
