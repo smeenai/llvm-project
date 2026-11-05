@@ -82,7 +82,15 @@ llvm::dwarf::parseRows(const CFIProgram &CFIP, UnwindRow &Row,
                        const RegisterLocations *InitialLocs) {
   // All the unwinding rows parsed during processing of the CFI program.
   UnwindTable::RowContainer Rows;
+  if (Error E = parseRows(CFIP, Row, InitialLocs,
+                          [&](const UnwindRow &R) { Rows.push_back(R); }))
+    return std::move(E);
+  return Rows;
+}
 
+Error llvm::dwarf::parseRows(const CFIProgram &CFIP, UnwindRow &Row,
+                             const RegisterLocations *InitialLocs,
+                             function_ref<void(const UnwindRow &)> OnRow) {
   // State consists of CFA value and register locations.
   std::vector<std::pair<UnwindLocation, RegisterLocations>> States;
   for (const CFIProgram::Instruction &Inst : CFIP) {
@@ -105,7 +113,7 @@ llvm::dwarf::parseRows(const CFIProgram &CFIP, UnwindRow &Row,
             "current row address 0x%" PRIx64,
             CFIP.callFrameString(Inst.Opcode).str().c_str(), *NewAddress,
             Row.getAddress());
-      Rows.push_back(Row);
+      OnRow(Row);
       Row.setAddress(*NewAddress);
       break;
     }
@@ -120,7 +128,7 @@ llvm::dwarf::parseRows(const CFIProgram &CFIP, UnwindRow &Row,
       // current entry’s location value and adding the value of delta *
       // code_alignment_factor. All other values in the new row are initially
       // identical to the current row.
-      Rows.push_back(Row);
+      OnRow(Row);
       llvm::Expected<uint64_t> Offset = Inst.getOperandAsUnsigned(CFIP, 0);
       if (!Offset)
         return Offset.takeError();
@@ -395,5 +403,5 @@ llvm::dwarf::parseRows(const CFIProgram &CFIP, UnwindRow &Row,
       break;
     }
   }
-  return Rows;
+  return Error::success();
 }

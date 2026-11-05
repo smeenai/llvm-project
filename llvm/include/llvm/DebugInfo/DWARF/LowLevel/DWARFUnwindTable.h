@@ -10,6 +10,7 @@
 #define LLVM_DEBUGINFO_DWARF_LOWLEVEL_DWARFUNWINDTABLE_H
 
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/STLFunctionalExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/DebugInfo/DWARF/LowLevel/DWARFCFIProgram.h"
 #include "llvm/DebugInfo/DWARF/LowLevel/DWARFExpression.h"
@@ -333,6 +334,12 @@ private:
 LLVM_ABI Expected<UnwindTable::RowContainer>
 parseRows(const CFIProgram &CFIP, UnwindRow &CurrRow,
           const RegisterLocations *InitialLocs);
+
+/// Like parseRows above, but passes each completed row to \a OnRow instead of
+/// accumulating them.
+LLVM_ABI Error parseRows(const CFIProgram &CFIP, UnwindRow &CurrRow,
+                         const RegisterLocations *InitialLocs,
+                         function_ref<void(const UnwindRow &)> OnRow);
 
 } // end namespace dwarf
 
