@@ -60,8 +60,6 @@ public:
   // FDE pointer encoding of each output CIE, keyed by its output offset.
   llvm::DenseMap<uint32_t, uint8_t> fdeEncodings;
 
-  void iterateFDEWithLSDA(llvm::function_ref<void(InputSection &)> fn);
-
 private:
   Defined *isFdeLive(EhSectionPiece &piece, ArrayRef<Relocation> rels);
 };

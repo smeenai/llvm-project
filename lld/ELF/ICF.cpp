@@ -60,6 +60,7 @@
 
 #include "ICF.h"
 #include "Config.h"
+#include "EhFrame.h"
 #include "InputFiles.h"
 #include "LinkerScript.h"
 #include "OutputSections.h"
@@ -104,6 +105,12 @@ private:
   bool equalsConstant(const InputSection *a, const InputSection *b);
   bool equalsVariable(const InputSection *a, const InputSection *b);
 
+  ArrayRef<FdeLsda> getLsdas(const InputSection *s) const {
+    auto it = lsdas.find(s);
+    return it == lsdas.end() ? ArrayRef<FdeLsda>()
+                             : ArrayRef<FdeLsda>(it->second);
+  }
+
   size_t findBoundary(size_t begin, size_t end);
 
   void forEachClassRange(size_t begin, size_t end,
@@ -113,6 +120,7 @@ private:
 
   Ctx &ctx;
   SmallVector<InputSection *, 0> sections;
+  DenseMap<const InputSection *, SmallVector<FdeLsda, 1>> lsdas;
 
   // We repeat the main loop while `Repeat` is true.
   std::atomic<bool> repeat;
@@ -356,6 +364,16 @@ bool ICF<ELFT>::equalsConstant(const InputSection *a, const InputSection *b) {
   if (a->getParent() != b->getParent())
     return false;
 
+  // Functions with LSDAs need equivalent LSDAs, interpreted by the same
+  // personality routines.
+  ArrayRef<FdeLsda> la = getLsdas(a), lb = getLsdas(b);
+  if (la.size() != lb.size())
+    return false;
+  for (size_t i = 0; i != la.size(); ++i)
+    if (la[i].lsdaOff != lb[i].lsdaOff || la[i].pers != lb[i].pers ||
+        la[i].persAddend != lb[i].persAddend)
+      return false;
+
   const RelsOrRelas<ELFT> ra = a->template relsOrRelas<ELFT>();
   const RelsOrRelas<ELFT> rb = b->template relsOrRelas<ELFT>();
   if (ra.areRelocsCrel() || rb.areRelocsCrel())
@@ -408,6 +426,12 @@ bool ICF<ELFT>::variableEq(const InputSection *secA, Relocs<RelTy> ra,
 // Compare "moving" part of two InputSections, namely relocation targets.
 template <class ELFT>
 bool ICF<ELFT>::equalsVariable(const InputSection *a, const InputSection *b) {
+  ArrayRef<FdeLsda> la = getLsdas(a), lb = getLsdas(b);
+  for (size_t i = 0; i != la.size(); ++i)
+    if (la[i].lsda != lb[i].lsda &&
+        la[i].lsda->eqClass[current] != lb[i].lsda->eqClass[current])
+      return false;
+
   const RelsOrRelas<ELFT> ra = a->template relsOrRelas<ELFT>();
   const RelsOrRelas<ELFT> rb = b->template relsOrRelas<ELFT>();
   if (ra.areRelocsCrel() || rb.areRelocsCrel())
@@ -480,16 +504,14 @@ void ICF<ELFT>::parallelForEachClass(
 // The main function of ICF.
 template <class ELFT> void ICF<ELFT>::run() {
   // Two text sections may have identical content and relocations but different
-  // LSDA, e.g. the two functions may have catch blocks of different types. If a
-  // text section is referenced by a .eh_frame FDE with LSDA, it is not
-  // eligible. This is implemented by iterating over CIE/FDE and setting
-  // eqClass[0] to the referenced text section from a live FDE.
-  //
-  // If two .gcc_except_table have identical semantics (usually identical
-  // content with PC-relative encoding), we will lose folding opportunity.
+  // LSDAs, e.g. the two functions may have catch blocks of different types. A
+  // function's LSDAs are compared like targets of its relocations.
+  for (EhInputSection *sec : ctx.in.ehFrame->sections)
+    forEachFdeLsda(*sec, [&](const FdeLsda &l) {
+      if (l.fn->isLive())
+        lsdas[l.fn].push_back(l);
+    });
   uint32_t uniqueId = 1;
-  ctx.in.ehFrame->iterateFDEWithLSDA(
-      [&](InputSection &s) { s.eqClass[0] = s.eqClass[1] = uniqueId++; });
 
   // Assign a temporary class ID (eqClassBase) to eligible sections and assign
   // unique IDs to ineligible sections. Use eqClassBase as the base for class
@@ -557,6 +579,13 @@ template <class ELFT> void ICF<ELFT>::run() {
       InputSection *s = sections[i];
       uint64_t h = xxh3_64bits(s->content());
       invokeOnRelocs(*s, hashRelocs, *s, h, edges, eqClassBase);
+      for (const FdeLsda &l : getLsdas(s)) {
+        h = mix(h, l.lsdaOff);
+        if (l.lsda->eqClass[0] >= eqClassBase)
+          edges.push_back(l.lsda->eqClass[0] - eqClassBase);
+        else
+          h = mix(h, l.lsda->eqClass[0]);
+      }
       hashes[i] = h;
       edgeEnd[i] = edges.size();
     }

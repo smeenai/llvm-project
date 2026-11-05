@@ -248,26 +248,6 @@ Defined *EhFrameSection::isFdeLive(EhSectionPiece &fde,
   return nullptr;
 }
 
-// Used by ICF.
-void EhFrameSection::iterateFDEWithLSDA(
-    llvm::function_ref<void(InputSection &)> fn) {
-  SmallVector<bool, 0> ciesWithLSDA;
-  for (EhInputSection *sec : sections) {
-    ciesWithLSDA.clear();
-    for (EhSectionPiece &cie : sec->cies)
-      ciesWithLSDA.push_back(hasLSDA(*sec, cie));
-    for (EhSectionPiece &fde : sec->fdes) {
-      if (!ciesWithLSDA[fde.cie])
-        continue;
-
-      // The CIE has a LSDA argument. Call fn with d's section.
-      if (Defined *d = isFdeLive(fde, sec->rels))
-        if (auto *s = dyn_cast_or_null<InputSection>(d->section))
-          fn(*s);
-    }
-  }
-}
-
 static void writeCieFde(Ctx &ctx, uint8_t *buf, ArrayRef<uint8_t> d) {
   memcpy(buf, d.data(), d.size());
   // Fix the size field. -4 since size does not include the size field itself.
