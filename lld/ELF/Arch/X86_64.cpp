@@ -576,6 +576,8 @@ RelExpr X86_64::getRelExpr(RelType type, const Symbol &s,
   case R_X86_64_PC32:
   case R_X86_64_PC64:
     return R_PC;
+  case R_X86_64_GOTPCREL:
+    return R_GOT_PC;
   case R_X86_64_GOTOFF64:
     return R_GOTPLTREL;
   case R_X86_64_GOTPC32:

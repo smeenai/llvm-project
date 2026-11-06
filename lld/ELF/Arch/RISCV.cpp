@@ -340,6 +340,8 @@ RelExpr RISCV::getRelExpr(const RelType type, const Symbol &s,
     return RE_RISCV_ADD;
   case R_RISCV_32_PCREL:
     return R_PC;
+  case R_RISCV_GOT32_PCREL:
+    return R_GOT_PC;
   case R_RISCV_SET_ULEB128:
   case R_RISCV_SUB_ULEB128:
     return RE_RISCV_LEB128;

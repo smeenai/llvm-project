@@ -163,6 +163,8 @@ RelExpr AArch64::getRelExpr(RelType type, const Symbol &s,
   case R_AARCH64_PREL32:
   case R_AARCH64_PREL64:
     return R_PC;
+  case R_AARCH64_GOTPCREL32:
+    return R_GOT_PC;
   case R_AARCH64_TLS_DTPREL64:
     return R_DTPREL;
   case R_AARCH64_NONE:

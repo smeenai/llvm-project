@@ -156,6 +156,8 @@ RelExpr ARM::getRelExpr(RelType type, const Symbol &s,
     return R_ABS;
   case R_ARM_REL32:
     return R_PC;
+  case R_ARM_GOT_PREL:
+    return R_GOT_PC;
   case R_ARM_SBREL32:
     return RE_ARM_SBREL;
   case R_ARM_TLS_LDO32:
