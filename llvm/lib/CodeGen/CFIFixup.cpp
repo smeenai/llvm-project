@@ -139,6 +139,16 @@ struct BlockFlags {
 // Most functions will have <= 32 basic blocks.
 using BlockFlagsVector = SmallVector<BlockFlags, 32>;
 
+// Returns the CFI indices of the prologue CFI instructions in MBB, in order.
+static SmallVector<unsigned, 8>
+prologueCFIIndices(const MachineBasicBlock &MBB) {
+  SmallVector<unsigned, 8> Indices;
+  for (const MachineInstr &MI : MBB)
+    if (isPrologueCFIInstruction(MI))
+      Indices.push_back(MI.getOperand(0).getCFIIndex());
+  return Indices;
+}
+
 // Computes the frame information for each block in the function. Frame info
 // for a block is inferred from its predecessors.
 static BlockFlagsVector
@@ -148,6 +158,11 @@ computeBlockInfo(const MachineFunction &MF,
   BlockInfo[0].Reachable = true;
   BlockInfo[0].StrongNoFrameOnEntry = true;
 
+  // Tail duplication can copy the block that completes the prologue; the
+  // copies carry the same CFI instructions and complete the prologue too.
+  const SmallVector<unsigned, 8> PrologueCFI =
+      prologueCFIIndices(*PrologueBlock);
+
   // Compute the presence/absence of frame at each basic block.
   ReversePostOrderTraversal<const MachineBasicBlock *> RPOT(&*MF.begin());
   for (const MachineBasicBlock *MBB : RPOT) {
@@ -155,7 +170,9 @@ computeBlockInfo(const MachineFunction &MF,
 
     // Set to true if the current block contains the prologue or the epilogue,
     // respectively.
-    bool HasPrologue = MBB == PrologueBlock;
+    bool HasPrologue =
+        MBB == PrologueBlock ||
+        (!PrologueCFI.empty() && prologueCFIIndices(*MBB) == PrologueCFI);
     bool HasEpilogue = false;
 
     if (Info.HasFrameOnEntry || HasPrologue)
@@ -316,6 +333,26 @@ static bool runImpl(MachineFunction &MF) {
     return false;
 
   BlockFlagsVector BlockInfo = computeBlockInfo(MF, PrologueBlock);
+
+  // If tail duplication copied the block that completes the prologue, start
+  // from the first copy in layout order, so that every block laid out after it
+  // (including the later copies) is fixed up.
+  const SmallVector<unsigned, 8> PrologueCFI =
+      prologueCFIIndices(*PrologueBlock);
+  for (MachineBasicBlock &MBB : MF) {
+    if (&MBB == PrologueBlock)
+      break;
+    if (prologueCFIIndices(MBB) != PrologueCFI)
+      continue;
+    PrologueBlock = &MBB;
+    for (MachineInstr &MI : reverse(MBB.instrs())) {
+      if (isPrologueCFIInstruction(MI)) {
+        PrologueEnd = std::next(MI.getIterator());
+        break;
+      }
+    }
+    break;
+  }
 
   // Walk the blocks of the function in "physical" order.
   // Every block inherits the frame state (as recorded in the unwind tables)
